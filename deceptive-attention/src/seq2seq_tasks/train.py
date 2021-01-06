@@ -24,7 +24,7 @@ import numpy as np
 
 import argparse
 from tqdm import tqdm
-import log
+# import log
 from data_utils import compute_frequencies, unkify_lines
 
 # --------------- parse the flags etc ----------------- #
@@ -503,10 +503,10 @@ test_loss, test_acc, test_attn_mass  = evaluate(model, test_batches, criterion)
 print(f'\t Test Loss: {test_loss:.3f} |  Test Acc: {test_acc:0.2f} \
         |  Test Attn Mass: {test_attn_mass:0.2f} |  Test PPL: {math.exp(test_loss):7.3f}')
 
-log.pr_green (f"Final Test Accuracy ..........\t{test_acc:0.2f}")
-log.pr_green (f"Final Test Attention Mass ....\t{test_attn_mass:0.2f}")
-log.pr_green (f"Convergence time in seconds ..\t{convergence_time:0.2f}")
-log.pr_green (f"Sample efficiency in epochs ..\t{epochs_taken_to_converge}")
+print(f"Final Test Accuracy ..........\t{test_acc:0.2f}")
+print(f"Final Test Attention Mass ....\t{test_attn_mass:0.2f}")
+print(f"Convergence time in seconds ..\t{convergence_time:0.2f}")
+print(f"Sample efficiency in epochs ..\t{epochs_taken_to_converge}")
 
 
 src_lang.save_vocab("data/vocab/" + TASK + SUFFIX + '_seed=' + str(SEED) \
@@ -517,10 +517,10 @@ trg_lang.save_vocab("data/vocab/" + TASK + SUFFIX + '_seed=' + str(SEED) \
 
 if TASK in ['en-hi', 'en-de']:
     # generate the output to copmute bleu scores as well...
-    log.pr_green("generating the output translations from the model")
+    print("generating the output translations from the model")
     test_batches_single = list(get_batches(test_sents[0], test_sents[1], test_sents[2], 1))
     output_lines = generate(model, test_batches_single)
-    log.pr_green("[done] .... now dumping the translations")
+    print("[done] .... now dumping the translations")
     outfile = "data/" + TASK + SUFFIX + "_seed" + str(SEED) + \
           '_coeff=' + str(COEFF) +  '_num-train=' + str(NUM_TRAIN) + ".test.out"
     fw = open(outfile, 'w')

@@ -21,15 +21,18 @@ from utils import Language
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
 parser.add_argument('--task', dest='task', default='copy',
-                    choices=('copy', 'rev', 'binary-flip', 'en-hi', 'en-de'),
+                    choices=('copy', 'reverse-copy', 'binary-flip', 'en-hi', 'en-de'),
                     help='select the task you want to run on')
 
 parser.add_argument('--debug', dest='debug', action='store_true')
 parser.add_argument('--loss-coef', dest='loss_coeff', type=float, default=0.0)
 parser.add_argument('--epochs', dest='epochs', type=int, default=5)
 parser.add_argument('--seed', dest='seed', type=int, default=1234)
-parser.add_argument('--uniform', dest='uniform', action='store_true')
-parser.add_argument('--no-attn', dest='no_attn', action='store_true')
+
+# parser.add_argument('--uniform', dest='uniform', action='store_true')
+# parser.add_argument('--no-attn', dest='no_attn', action='store_true')
+parser.add_argument('--attention', dest='attention', action='store_true')
+
 parser.add_argument('--batch-size', dest='batch_size', type=int, default=128)
 parser.add_argument('--num-train', dest='num_train', type=int, default=1000000)
 parser.add_argument('--decode-with-no-attn', dest='no_attn_inference', action='store_true')
@@ -39,13 +42,28 @@ TASK = params['task']
 DEBUG = params['debug']
 COEFF = params['loss_coeff']
 NUM_EPOCHS = params['epochs']
-UNIFORM = params['uniform']
-NO_ATTN = params['no_attn']
+
+ENC_EMB_DIM = 256
+DEC_EMB_DIM = 256
+ENC_HID_DIM = 512
+DEC_HID_DIM = 512
+ENC_DROPOUT = 0.5
+DEC_DROPOUT = 0.5
+PAD_IDX = utils.PAD_token
+SOS_IDX = utils.SOS_token
+EOS_IDX = utils.EOS_token
+
+# UNIFORM = params['uniform']
+# NO_ATTN = params['no_attn']
+
+# can have values 'head-by-head', 'uniform', or 'no_attention'
+ATTENTION = params['attention']
+
 NUM_TRAIN = params['num_train']
 DECODE_WITH_NO_ATTN = params['no_attn_inference']
 
-INPUT_VOCAB = 10000
-OUTPUT_VOCAB = 10000
+# INPUT_VOCAB = 10000
+# OUTPUT_VOCAB = 10000
 
 long_type = torch.LongTensor
 float_type = torch.FloatTensor
@@ -55,33 +73,43 @@ if use_cuda:
     long_type = torch.cuda.LongTensor
     float_type = torch.cuda.FloatTensor
 
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+SRC_LANG = Language('src')
+TRG_LANG = Language('trg')
+
+SPLITS = ['train', 'dev', 'test']
+
+SEED = params['seed']
+BATCH_SIZE = params['batch_size']
+
 
 # The following function is not being used right now, and is deprecated.
-def generate_mask(attn_shape, list_src_lens=None):
+def generate_mask(attn_shape, task, list_src_lens=None):
     trg_len, batch_size, src_len = attn_shape
 
     mask = torch.zeros(attn_shape).type(float_type)
     min_seq_len = min(trg_len, src_len)
 
-    if TASK == 'copy':
+    if task == 'copy':
         diag_items = torch.arange(min_seq_len)
         mask[diag_items, :, diag_items] = 1.0
-    elif TASK == 'rev':
+    elif task == 'rev':
         assert list_src_lens is not None
         for b in range(batch_size):
             i = torch.arange(min_seq_len)
             j = torch.tensor([max(0, list_src_lens[b] - i - 1) for i in range(min_seq_len)])
             mask[i, b, j] = 1.0
-    elif TASK == 'binary-flip':
+    elif task == 'binary-flip':
         last = min_seq_len if min_seq_len % 2 == 1 else min_seq_len - 1
         i = torch.tensor([i for i in range(1, last)])
         j = torch.tensor([i - 1 if i % 2 == 0 else i + 1 for i in range(1, last)])
         mask[i, :, j] = 1.0
-    elif TASK == 'en-hi':
-        # english hindi, nothing as of now... will have a billingual dict later.
+    elif task == 'en-hi':
+        # english hindi, nothing as of now... will have a bilingual dict later.
         pass
     else:
-        raise ValueError("TASK can be one of copy, rev, binary-flip")
+        raise ValueError("task can be one of copy, reverse-copy, binary-flip")
 
         # make sure there are no impermissible tokens for first target
     mask[0, :, :] = 0.0  # the first target is free...
@@ -91,7 +119,7 @@ def generate_mask(attn_shape, list_src_lens=None):
     return mask
 
 
-def train(model, data, optimizer, criterion, clip):
+def train_model(model, data, optimizer, criterion, coeff):
     model.train()
 
     epoch_loss = 0
@@ -141,11 +169,11 @@ def train(model, data, optimizer, criterion, clip):
         # total_src += non_pad_tokens_src # non pad tokens src
         total_correct += torch.sum((trg == predictions) * trg_non_pad_indices).item()
 
-        loss = criterion(output, trg) - COEFF * torch.log(1 - attn_mass_imp / non_pad_tokens_trg)
+        loss = criterion(output, trg) - coeff * torch.log(1 - attn_mass_imp / non_pad_tokens_trg)
 
         loss.backward()
 
-        torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
 
         optimizer.step()
 
@@ -233,20 +261,18 @@ def generate(model, data):
 
             predictions = torch.argmax(output, dim=1)  # long tensor
             # shape [trg len - 1]
-            generated_tokens = [trg_lang.get_word(w) for w in predictions.cpu().numpy()]
+            generated_tokens = [TRG_LANG.get_word(w) for w in predictions.cpu().numpy()]
 
             generated_lines.append(" ".join(generated_tokens))
 
     return generated_lines
 
 
-SEED = params['seed']
-BATCH_SIZE = params['batch_size']
-
-random.seed(SEED)
-torch.manual_seed(SEED)
-torch.backends.cudnn.deterministic = True
-models.set_seed(SEED)
+def set_seed(seed):
+    random.seed(seed)
+    torch.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    models.set_seed(seed)
 
 
 def init_weights(m):
@@ -261,51 +287,64 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-src_lang = Language('src')
-trg_lang = Language('trg')
+def initialize_sentences(task, debug, num_train):
+    sentences = []
 
-splits = ['train', 'dev', 'test']
-sentences = []
+    for sp in SPLITS:
+        src_filename = "./data/" + sp + "." + task + ".src"
+        trg_filename = "./data/" + sp + "." + task + ".trg"
 
-for sp in splits:
-    src_filename = "./data/" + sp + "." + TASK + ".src"
-    trg_filename = "./data/" + sp + "." + TASK + ".trg"
+        src_sentences = open(src_filename).readlines()
+        trg_sentences = open(trg_filename).readlines()
 
-    src_sentences = open(src_filename).readlines()
-    trg_sentences = open(trg_filename).readlines()
+        alignment_filename = "./data/" + sp + "." + task + ".align"
 
-    alignment_filename = "./data/" + sp + "." + TASK + ".align"
+        alignment_sentences = open(alignment_filename).readlines()
 
-    alignment_sentences = open(alignment_filename).readlines()
+        if debug:  # small scale
+            src_sentences = src_sentences[:int(1e5)]
+            trg_sentences = trg_sentences[:int(1e5)]
+            alignment_sentences = alignment_sentences[: int(1e5)]
 
-    if DEBUG:  # small scale
-        src_sentences = src_sentences[:int(1e5)]
-        trg_sentences = trg_sentences[:int(1e5)]
-        alignment_sentences = alignment_sentences[: int(1e5)]
+        if sp == 'train':
+            src_sentences = src_sentences[:num_train]
+            trg_sentences = trg_sentences[:num_train]
+            alignment_sentences = alignment_sentences[:num_train]
 
-    if sp == 'train':
-        src_sentences = src_sentences[:NUM_TRAIN]
-        trg_sentences = trg_sentences[:NUM_TRAIN]
-        alignment_sentences = alignment_sentences[:NUM_TRAIN]
+        sentences.append([src_sentences, trg_sentences, alignment_sentences])
 
-    sentences.append([src_sentences, trg_sentences, alignment_sentences])
+    # train_sentences = sentences[0]
 
-train_sents = sentences[0]
+    '''
+    train_src_sents = train_sents[0]
+    train_trg_sents = train_sents[1]
+    train_alignments = train_sents[2]
+    top_src_words = compute_frequencies(train_src_sents, INPUT_VOCAB)
+    top_trg_words = compute_frequencies(train_trg_sents, OUTPUT_VOCAB)
+    
+    train_src_sents = unkify_lines(train_src_sents, top_src_words)
+    train_trg_sents = unkify_lines(train_trg_sents, top_trg_words)
+    train_sents = train_src_sents, train_trg_sents
+    '''
 
-'''
-train_src_sents = train_sents[0]
-train_trg_sents = train_sents[1]
-train_alignments = train_sents[2]
-top_src_words = compute_frequencies(train_src_sents, INPUT_VOCAB)
-top_trg_words = compute_frequencies(train_trg_sents, OUTPUT_VOCAB)
+    # dev_sentences = sentences[1]
+    # test_sentences = sentences[2]
 
-train_src_sents = unkify_lines(train_src_sents, top_src_words)
-train_trg_sents = unkify_lines(train_trg_sents, top_trg_words)
-train_sents = train_src_sents, train_trg_sents
-'''
+    return sentences
 
-dev_sentences = sentences[1]
-test_sentences = sentences[2]
+
+def get_batches(sentences, batch_size):
+    train_sentences = sentences[0]
+    dev_sentences = sentences[1]
+    test_sentences = sentences[2]
+
+    train_batches = list(get_batches(train_sentences[0], train_sentences[1], train_sentences[2], batch_size))
+    SRC_LANG.stop_accepting_new_words()
+    TRG_LANG.stop_accepting_new_words()
+    dev_batches = list(get_batches(dev_sentences[0], dev_sentences[1], dev_sentences[2], batch_size))
+    test_batches = list(get_batches(test_sentences[0], test_sentences[1], test_sentences[2], batch_size))
+
+    return train_batches, dev_batches, test_batches
 
 
 def get_batches(src_sentences, trg_sentences, alignments, batch_size):
@@ -320,8 +359,8 @@ def get_batches(src_sentences, trg_sentences, alignments, batch_size):
         align_sample = alignments[b_idx: b_idx + batch_size]
 
         # represent them
-        src_sample = [src_lang.get_sent_rep(s) for s in src_sample]
-        trg_sample = [trg_lang.get_sent_rep(s) for s in trg_sample]
+        src_sample = [SRC_LANG.get_sent_rep(s) for s in src_sample]
+        trg_sample = [TRG_LANG.get_sent_rep(s) for s in trg_sample]
 
         # sort by decreasing source len
         sorted_ids = sorted(enumerate(src_sample), reverse=True, key=lambda x: len(x[1]))
@@ -337,8 +376,8 @@ def get_batches(src_sentences, trg_sentences, alignments, batch_size):
         max_trg_len = max(trg_len)
 
         # pad the extra indices 
-        src_sample = src_lang.pad_sequences(src_sample, max_src_len)
-        trg_sample = trg_lang.pad_sequences(trg_sample, max_trg_len)
+        src_sample = SRC_LANG.pad_sequences(src_sample, max_src_len)
+        trg_sample = TRG_LANG.pad_sequences(trg_sample, max_trg_len)
 
         # generated masks
         aligned_outputs = []
@@ -366,123 +405,136 @@ def get_batches(src_sentences, trg_sentences, alignments, batch_size):
         yield src_sample, src_len, trg_sample, trg_len, aligned_outputs
 
 
-train_batches = list(get_batches(train_sents[0], train_sents[1], train_sents[2], BATCH_SIZE))
-src_lang.stop_accepting_new_words()
-trg_lang.stop_accepting_new_words()
-dev_batches = list(get_batches(dev_sentences[0], dev_sentences[1], dev_sentences[2], BATCH_SIZE))
-test_batches = list(get_batches(test_sentences[0], test_sentences[1], test_sentences[2], BATCH_SIZE))
+def initialize_model(attention, encoder_emb_dim, decoder_emb_dim, encoder_hid_dim, decoder_hid_dim):
+    # --------------------------------------------------------#
+    # ------------------- define the model -------------------#
+    # --------------------------------------------------------#
 
-# --------------------------------------------------------#
-# ------------------- define the model -------------------#
-# --------------------------------------------------------#
-INPUT_DIM = src_lang.get_vocab_size()
-OUTPUT_DIM = trg_lang.get_vocab_size()
-print(f"Input vocab {INPUT_DIM} and output vocab {OUTPUT_DIM}")
-ENC_EMB_DIM = 256
-DEC_EMB_DIM = 256
-ENC_HID_DIM = 512
-DEC_HID_DIM = 512
-ENC_DROPOUT = 0.5
-DEC_DROPOUT = 0.5
-PAD_IDX = utils.PAD_token
-SOS_IDX = utils.SOS_token
-EOS_IDX = utils.EOS_token
-SUFFIX = ""
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    input_dim = SRC_LANG.get_vocab_size()
+    output_dim = TRG_LANG.get_vocab_size()
+    print(f"Input vocabulary size {input_dim} and output vocabulary size {output_dim}.")
 
-attn = Attention(ENC_HID_DIM, DEC_HID_DIM)
-enc = Encoder(INPUT_DIM, ENC_EMB_DIM, ENC_HID_DIM, DEC_HID_DIM, ENC_DROPOUT)
+    suffix = ""
 
-if UNIFORM:
-    dec = DecoderUniform(OUTPUT_DIM, DEC_EMB_DIM, ENC_HID_DIM, DEC_HID_DIM, DEC_DROPOUT, attn)
-    SUFFIX = "_uniform"
-elif NO_ATTN or DECODE_WITH_NO_ATTN:
-    dec = DecoderNoAttn(OUTPUT_DIM, DEC_EMB_DIM, ENC_HID_DIM, DEC_HID_DIM, DEC_DROPOUT, attn)
-    if NO_ATTN:
-        SUFFIX = "_no-attn"
-else:
-    dec = Decoder(OUTPUT_DIM, DEC_EMB_DIM, ENC_HID_DIM, DEC_HID_DIM, DEC_DROPOUT, attn)
+    attn = Attention(encoder_hid_dim, decoder_emb_dim)
+    enc = Encoder(input_dim, encoder_emb_dim, encoder_hid_dim, decoder_hid_dim, ENC_DROPOUT)
 
-model = Seq2Seq(enc, dec, PAD_IDX, SOS_IDX, EOS_IDX, device).to(device)
-# init weights 
-model.apply(init_weights)
-# count the params 
-print(f'The model has {count_parameters(model):,} trainable parameters')
-optimizer = optim.Adam(model.parameters())
-criterion = nn.CrossEntropyLoss(ignore_index=PAD_IDX)
-# --------- end of model definition --------- #
-
-# NUM_EPOCHS = 5
-
-CLIP = 1
-
-best_valid_loss = float('inf')
-convergence_time = 0.0
-epochs_taken_to_converge = 0
-
-no_improvement_last_time = False
-
-for epoch in range(NUM_EPOCHS):
-
-    start_time = time.time()
-
-    train_loss, train_acc, train_attn_mass = train(model, train_batches,
-                                                   optimizer, criterion, CLIP)
-    valid_loss, val_acc, val_attn_mass = evaluate(model, dev_batches, criterion)
-
-    end_time = time.time()
-
-    epoch_mins, epoch_secs = epoch_time(start_time, end_time)
-
-    if valid_loss < best_valid_loss:
-        best_valid_loss = valid_loss
-        torch.save(model.state_dict(), 'data/models/model_' + TASK + SUFFIX + '_seed=' + str(SEED) + '_coeff='
-                   + str(COEFF) + '_num-train=' + str(NUM_TRAIN) + '.pt')
-        epochs_taken_to_converge = epoch + 1
-        convergence_time += (end_time - start_time)
-        no_improvement_last_time = False
+    if attention == 'uniform':
+        dec = DecoderUniform(output_dim, decoder_emb_dim, encoder_hid_dim, decoder_hid_dim, DEC_DROPOUT, attn)
+        suffix = "_uniform"
+    elif attention == 'no_attention' or DECODE_WITH_NO_ATTN:
+        dec = DecoderNoAttn(output_dim, decoder_emb_dim, encoder_hid_dim, decoder_hid_dim, DEC_DROPOUT, attn)
+        if attention == 'no_attention':
+            suffix = "_no-attn"
     else:
-        # no improvement this time
-        if no_improvement_last_time:
-            break
-        no_improvement_last_time = True
+        dec = Decoder(output_dim, decoder_emb_dim, encoder_hid_dim, decoder_hid_dim, DEC_DROPOUT, attn)
 
-    print(f'Epoch: {epoch + 1:02} | Time: {epoch_mins}m {epoch_secs}s')
-    print(f'\tTrain Loss: {train_loss:.3f} | Train Acc: {train_acc:0.2f} \
-        | Train Attn Mass: {train_attn_mass:0.2f} | Train PPL: {math.exp(train_loss):7.3f}')
-    print(f'\t Val. Loss: {valid_loss:.3f} |   Val Acc: {val_acc:0.2f} \
-        |  Val. Attn Mass: {val_attn_mass:0.2f} |  Val. PPL: {math.exp(valid_loss):7.3f}')
+    model = Seq2Seq(enc, dec, PAD_IDX, SOS_IDX, EOS_IDX, DEVICE).to(DEVICE)
 
-# load the best model and print stats:
-model.load_state_dict(torch.load('data/models/model_' + TASK + SUFFIX + '_seed=' + str(SEED) + '_coeff='
-                                 + str(COEFF) + '_num-train=' + str(NUM_TRAIN) + '.pt'))
+    # init weights
+    model.apply(init_weights)
 
-test_loss, test_acc, test_attn_mass = evaluate(model, test_batches, criterion)
-print(f'\t Test Loss: {test_loss:.3f} |  Test Acc: {test_acc:0.2f} \
-        |  Test Attn Mass: {test_attn_mass:0.2f} |  Test PPL: {math.exp(test_loss):7.3f}')
+    # count the params
+    print(f'The model has {count_parameters(model):,} trainable parameters.')
 
-print(f"Final Test Accuracy ..........\t{test_acc:0.2f}")
-print(f"Final Test Attention Mass ....\t{test_attn_mass:0.2f}")
-print(f"Convergence time in seconds ..\t{convergence_time:0.2f}")
-print(f"Sample efficiency in epochs ..\t{epochs_taken_to_converge}")
+    optimizer = optim.Adam(model.parameters())
+    criterion = nn.CrossEntropyLoss(ignore_index=PAD_IDX)
 
-src_lang.save_vocab("data/vocab/" + TASK + SUFFIX + '_seed=' + str(SEED) \
-                    + '_coeff=' + str(COEFF) + '_num-train=' + str(NUM_TRAIN) + ".src.vocab")
-trg_lang.save_vocab("data/vocab/" + TASK + SUFFIX + '_seed=' + str(SEED) \
-                    + '_coeff=' + str(COEFF) + '_num-train=' + str(NUM_TRAIN) + ".trg.vocab")
+    return optimizer, criterion, model, suffix
 
-if TASK in ['en-hi', 'en-de']:
-    # generate the output to compute bleu scores as well...
-    print("generating the output translations from the model")
+    # --------- end of model definition --------- #
 
-    test_batches_single = list(get_batches(test_sentences[0], test_sentences[1], test_sentences[2], 1))
-    output_lines = generate(model, test_batches_single)
 
-    print("[done] .... now dumping the translations")
+def train(task=TASK,
+          num_epochs=NUM_EPOCHS,
+          coeff=COEFF, seed=SEED,
+          batch_size=BATCH_SIZE,
+          attention=ATTENTION,
+          debug=DEBUG,
+          num_train=NUM_TRAIN,
+          encoder_emb_dim=ENC_EMB_DIM,
+          decoder_emb_dim=DEC_EMB_DIM,
+          encoder_hid_dim=ENC_HID_DIM,
+          decoder_hid_dim=DEC_HID_DIM):
+    # load vocabulary if already present
+    SRC_LANG.load_vocab("data/" + task + '_coeff=' + str(coeff) + ".src.vocab")
+    TRG_LANG.load_vocab("data/" + task + '_coeff=' + str(coeff) + ".trg.vocab")
 
-    outfile = "data/" + TASK + SUFFIX + "_seed" + str(SEED) + '_coeff=' + str(COEFF) + '_num-train=' \
-              + str(NUM_TRAIN) + ".test.out"
-    fw = open(outfile, 'w')
-    for line in output_lines:
-        fw.write(line.strip() + "\n")
-    fw.close()
+    # setup the model
+    optimizer, criterion, model, suffix = initialize_model(attention, encoder_emb_dim, decoder_emb_dim, encoder_hid_dim,
+                                                           decoder_hid_dim)
+
+    sentences = initialize_sentences(task, debug, num_train)
+
+    train_batches, dev_batches, test_batches = get_batches(sentences, batch_size)
+
+    best_valid_loss = float('inf')
+    convergence_time = 0.0
+    epochs_taken_to_converge = 0
+
+    no_improvement_last_time = False
+
+    for epoch in range(num_epochs):
+
+        start_time = time.time()
+
+        train_loss, train_acc, train_attn_mass = train_model(model, train_batches, optimizer, criterion, coeff)
+        valid_loss, val_acc, val_attn_mass = evaluate(model, dev_batches, criterion)
+
+        end_time = time.time()
+
+        epoch_minutes, epoch_secs = epoch_time(start_time, end_time)
+
+        if valid_loss < best_valid_loss:
+            best_valid_loss = valid_loss
+            torch.save(model.state_dict(), 'data/models/model_' + task + suffix + '_seed=' + str(seed) + '_coeff='
+                       + str(coeff) + '_num-train=' + str(num_train) + '.pt')
+            epochs_taken_to_converge = epoch + 1
+            convergence_time += (end_time - start_time)
+            no_improvement_last_time = False
+        else:
+            # no improvement this time
+            if no_improvement_last_time:
+                break
+            no_improvement_last_time = True
+
+        print(f'Epoch: {epoch + 1:02} | Time: {epoch_minutes}m {epoch_secs}s')
+        print(f'\tTrain Loss: {train_loss:.3f} | Train Acc: {train_acc:0.2f} \
+            | Train Attn Mass: {train_attn_mass:0.2f} | Train PPL: {math.exp(train_loss):7.3f}')
+        print(f'\t Val. Loss: {valid_loss:.3f} |   Val Acc: {val_acc:0.2f} \
+            |  Val. Attn Mass: {val_attn_mass:0.2f} |  Val. PPL: {math.exp(valid_loss):7.3f}')
+
+    # load the best model and print stats:
+    model.load_state_dict(torch.load('data/models/model_' + task + suffix + '_seed=' + str(seed) + '_coeff='
+                                     + str(coeff) + '_num-train=' + str(num_train) + '.pt'))
+
+    test_loss, test_acc, test_attn_mass = evaluate(model, test_batches, criterion)
+    print(f'\t Test Loss: {test_loss:.3f} |  Test Acc: {test_acc:0.2f} \
+            |  Test Attn Mass: {test_attn_mass:0.2f} |  Test PPL: {math.exp(test_loss):7.3f}')
+
+    print(f"Final Test Accuracy ..........\t{test_acc:0.2f}")
+    print(f"Final Test Attention Mass ....\t{test_attn_mass:0.2f}")
+    print(f"Convergence time in seconds ..\t{convergence_time:0.2f}")
+    print(f"Sample efficiency in epochs ..\t{epochs_taken_to_converge}")
+
+    SRC_LANG.save_vocab("data/vocab/" + task + suffix + '_seed=' + str(seed)
+                        + '_coeff=' + str(coeff) + '_num-train=' + str(num_train) + ".src.vocab")
+    TRG_LANG.save_vocab("data/vocab/" + task + suffix + '_seed=' + str(seed)
+                        + '_coeff=' + str(coeff) + '_num-train=' + str(num_train) + ".trg.vocab")
+
+    if task in ['en-hi', 'en-de']:
+        # generate the output to compute bleu scores as well...
+        print("generating the output translations from the model")
+
+        test_sentences = sentences[2]
+        test_batches_single = list(get_batches(test_sentences[0], test_sentences[1], test_sentences[2], 1))
+        output_lines = generate(model, test_batches_single)
+
+        print("[done] .... now dumping the translations")
+
+        outfile = "data/" + task + suffix + "_seed" + str(seed) + '_coeff=' + str(coeff) + '_num-train=' \
+                  + str(num_train) + ".test.out"
+        fw = open(outfile, 'w')
+        for line in output_lines:
+            fw.write(line.strip() + "\n")
+        fw.close()

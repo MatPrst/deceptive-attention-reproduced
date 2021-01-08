@@ -14,6 +14,7 @@ import utils
 from gen_utils import *
 from models import Attention, Seq2Seq, Encoder, Decoder, DecoderNoAttn, DecoderUniform
 from utils import Language
+import os
 
 # import log
 
@@ -31,11 +32,11 @@ parser.add_argument('--seed', dest='seed', type=int, default=1234)
 
 # parser.add_argument('--uniform', dest='uniform', action='store_true')
 # parser.add_argument('--no-attn', dest='no_attn', action='store_true')
-parser.add_argument('--attention', dest='attention', action='store_true')
+parser.add_argument('--attention', dest='attention', action='store_true', default='head-by-head')
 
 parser.add_argument('--batch-size', dest='batch_size', type=int, default=128)
 parser.add_argument('--num-train', dest='num_train', type=int, default=1000000)
-parser.add_argument('--decode-with-no-attn', dest='no_attn_inference', action='store_true')
+parser.add_argument('--decode-with-no-attn', dest='no_attn_inference', action='store_true', default=True)
 
 params = vars(parser.parse_args())
 TASK = params['task']
@@ -333,7 +334,7 @@ def initialize_sentences(task, debug, num_train):
     return sentences
 
 
-def get_batches(sentences, batch_size):
+def get_batches_from_sentences(sentences, batch_size):
     train_sentences = sentences[0]
     dev_sentences = sentences[1]
     test_sentences = sentences[2]
@@ -447,7 +448,8 @@ def initialize_model(attention, encoder_emb_dim, decoder_emb_dim, encoder_hid_di
 
 def train(task=TASK,
           num_epochs=NUM_EPOCHS,
-          coeff=COEFF, seed=SEED,
+          coeff=COEFF,
+          seed=SEED,
           batch_size=BATCH_SIZE,
           attention=ATTENTION,
           debug=DEBUG,
@@ -456,9 +458,19 @@ def train(task=TASK,
           decoder_emb_dim=DEC_EMB_DIM,
           encoder_hid_dim=ENC_HID_DIM,
           decoder_hid_dim=DEC_HID_DIM):
+    print(f"Starting training..........")
+    print(f"Configuration:\n num_epochs: {num_epochs}\n coeff: {coeff}\n seed: {seed}\n batch_size: "
+          f"{batch_size}\n attention: {attention}\n debug: {debug}\n num_train: {num_train}\n")
+
     # load vocabulary if already present
-    SRC_LANG.load_vocab("data/" + task + '_coeff=' + str(coeff) + ".src.vocab")
-    TRG_LANG.load_vocab("data/" + task + '_coeff=' + str(coeff) + ".trg.vocab")
+    src_vocab_path = "data/" + task + '_coeff=' + str(coeff) + ".src.vocab"
+    trg_vocab_path = "data/" + task + '_coeff=' + str(coeff) + ".trg.vocab"
+
+    if os.path.exists(src_vocab_path):
+        SRC_LANG.load_vocab(src_vocab_path)
+
+    if os.path.exists(trg_vocab_path):
+        TRG_LANG.load_vocab(trg_vocab_path)
 
     # setup the model
     optimizer, criterion, model, suffix = initialize_model(attention, encoder_emb_dim, decoder_emb_dim, encoder_hid_dim,
@@ -466,7 +478,7 @@ def train(task=TASK,
 
     sentences = initialize_sentences(task, debug, num_train)
 
-    train_batches, dev_batches, test_batches = get_batches(sentences, batch_size)
+    train_batches, dev_batches, test_batches = get_batches_from_sentences(sentences, batch_size)
 
     best_valid_loss = float('inf')
     convergence_time = 0.0
@@ -538,3 +550,20 @@ def train(task=TASK,
         for line in output_lines:
             fw.write(line.strip() + "\n")
         fw.close()
+
+
+def main():
+
+    if not os.path.exists('data'):
+        os.makedirs('data')
+
+    if not os.path.exists('data/models/'):
+        os.makedirs('data/models/')
+
+    if not os.path.exists('data/vocab/'):
+        os.makedirs('data/vocab/')
+
+    train()
+
+
+if __name__ == "__main__": main()

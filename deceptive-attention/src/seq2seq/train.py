@@ -1,5 +1,6 @@
 import argparse
 import math
+import os
 import random
 import time
 
@@ -14,7 +15,6 @@ import utils
 from gen_utils import *
 from models import Attention, Seq2Seq, Encoder, Decoder, DecoderNoAttn, DecoderUniform
 from utils import Language
-import os
 
 # import log
 
@@ -44,6 +44,16 @@ DEBUG = params['debug']
 COEFF = params['loss_coeff']
 NUM_EPOCHS = params['epochs']
 
+long_type = torch.LongTensor
+float_type = torch.FloatTensor
+use_cuda = torch.cuda.is_available()
+
+if use_cuda:
+    long_type = torch.cuda.LongTensor
+    float_type = torch.cuda.FloatTensor
+
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 ENC_EMB_DIM = 256
 DEC_EMB_DIM = 256
 ENC_HID_DIM = 512
@@ -65,16 +75,6 @@ DECODE_WITH_NO_ATTN = params['no_attn_inference']
 
 # INPUT_VOCAB = 10000
 # OUTPUT_VOCAB = 10000
-
-long_type = torch.LongTensor
-float_type = torch.FloatTensor
-use_cuda = torch.cuda.is_available()
-
-if use_cuda:
-    long_type = torch.cuda.LongTensor
-    float_type = torch.cuda.FloatTensor
-
-DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 SRC_LANG = Language('src')
 TRG_LANG = Language('trg')
@@ -460,7 +460,7 @@ def train(task=TASK,
           decoder_hid_dim=DEC_HID_DIM):
     print(f"Starting training..........")
     print(f"Configuration:\n num_epochs: {num_epochs}\n coeff: {coeff}\n seed: {seed}\n batch_size: "
-          f"{batch_size}\n attention: {attention}\n debug: {debug}\n num_train: {num_train}\n")
+          f"{batch_size}\n attention: {attention}\n debug: {debug}\n num_train: {num_train}\n device: {DEVICE}")
 
     # load vocabulary if already present
     src_vocab_path = "data/" + task + '_coeff=' + str(coeff) + ".src.vocab"
@@ -472,13 +472,13 @@ def train(task=TASK,
     if os.path.exists(trg_vocab_path):
         TRG_LANG.load_vocab(trg_vocab_path)
 
-    # setup the model
-    optimizer, criterion, model, suffix = initialize_model(attention, encoder_emb_dim, decoder_emb_dim, encoder_hid_dim,
-                                                           decoder_hid_dim)
-
     sentences = initialize_sentences(task, debug, num_train)
 
     train_batches, dev_batches, test_batches = get_batches_from_sentences(sentences, batch_size)
+
+    # setup the model
+    optimizer, criterion, model, suffix = initialize_model(attention, encoder_emb_dim, decoder_emb_dim, encoder_hid_dim,
+                                                           decoder_hid_dim)
 
     best_valid_loss = float('inf')
     convergence_time = 0.0
@@ -553,7 +553,6 @@ def train(task=TASK,
 
 
 def main():
-
     if not os.path.exists('data'):
         os.makedirs('data')
 

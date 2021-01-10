@@ -13,13 +13,11 @@ import torch.nn as nn
 from models import EmbAttModel, BiLSTMAttModel, BiLSTMModel
 import pickle
 
-import log
 import util
 
 
 # parsing stuff from the command line
-parser = argparse.ArgumentParser(
-    formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
 parser.add_argument('--emb-size', dest='emb_size', type=int, default=128,
         help = 'number of dimensions for the embedding layer')
@@ -112,10 +110,10 @@ CLIP_VOCAB = params['clip_vocab']
 VOCAB_SIZE = params['vocab_size']
 
 # print useful info
-log.pr_blue("Task: %s" %(TASK_NAME))
-log.pr_blue("Model: %s" %(MODEL_TYPE))
-log.pr_blue("Coef (hammer): %0.2f" %(C_HAMMER))
-log.pr_blue("Coef (random-entropy): %0.2f" %(C_ENTROPY))
+print("Task: %s" %(TASK_NAME))
+print("Model: %s" %(MODEL_TYPE))
+print("Coef (hammer): %0.2f" %(C_HAMMER))
+print("Coef (random-entropy): %0.2f" %(C_ENTROPY))
 
 np.random.seed(SEED)
 random.seed(SEED)
@@ -126,10 +124,8 @@ w2c = defaultdict(lambda: 0.0) # word to count
 t2i = defaultdict(lambda: len(t2i))
 UNK = w2i["<unk>"]
 
-# gender_tokens = ["he", "she", "her", "his", "him"]
 
 def read_dataset(data_file, block_words=None, block_file=None, attn_file=None, clip_vocab=False):
-
     data_lines = open(data_file).readlines()
     global w2i
 
@@ -174,10 +170,6 @@ def read_dataset(data_file, block_words=None, block_file=None, attn_file=None, c
 
         if attn_file is not None:
             attn_wts = [float(i) for i in attn_lines[idx].strip().split()]
-            # neglect_top = max(0, min(BLOCK_TOP, len(words) - 1))
-            # top_ids = np.argsort(neg_attn_wts)[: neglect_top]
-            # for i in top_ids:
-            #     block_ids[i] = 1
 
         # check for the right len
         if len(block_ids) != len(words):
@@ -282,8 +274,6 @@ def evaluate(dataset, iter, name='test', attn_stats=False, num_vis=0):
         if idx < num_vis:
 
             attn_scores = attn[0].detach().cpu().numpy()
-            # util.pretty_importance_scores_vertical([i2w[w] \
-            #     for w in words], attn_scores)
 
             example_data.append([[i2w[w] for w in words], attn_scores, i2t[predict], i2t[tag]])
 
@@ -365,7 +355,8 @@ def dump_attention_maps(dataset, filename):
 prefix = "data/" + TASK_NAME + "/"
 
 if USE_BLOCK_FILE:
-    log.pr_blue("Using block file")
+    # log.pr_blue("Using block file")
+    print("Using block file")
     train = list(read_dataset(prefix+"train.txt",
                 block_file=prefix + "train.txt.block", clip_vocab=CLIP_VOCAB))
     w2i = defaultdict(lambda: UNK, w2i)
@@ -377,7 +368,8 @@ if USE_BLOCK_FILE:
     test = list(read_dataset(prefix+"test.txt",
                 block_file=prefix + "test.txt.block"))
 elif USE_ATTN_FILE:
-    log.pr_blue("Using attn file")
+    # log.pr_blue("Using attn file")
+    print("Using attn file")
     train = list(read_dataset(prefix+"train.txt", block_words=BLOCK_WORDS,
                 attn_file=prefix + "train.txt.attn." + MODEL_TYPE, clip_vocab=CLIP_VOCAB))
     w2i = defaultdict(lambda: UNK, w2i)
@@ -390,9 +382,11 @@ elif USE_ATTN_FILE:
                 attn_file=prefix + "test.txt.attn." + MODEL_TYPE))
 else:
     if BLOCK_WORDS is None:
-        log.pr_blue("Vanilla case: no attention manipulation")
+        # log.pr_blue("Vanilla case: no attention manipulation")
+        print("Vanilla case: no attention manipulation")
     else:
-        log.pr_blue("Using block words")
+        # log.pr_blue("Using block words")
+        print("Using block words")
 
     train = list(read_dataset(prefix+"train.txt", block_words=BLOCK_WORDS, clip_vocab=CLIP_VOCAB))
     nwords = len(w2i) if not CLIP_VOCAB else VOCAB_SIZE
@@ -416,7 +410,8 @@ i2t = {v: k for k, v in t2i.items()}
 
 ntags = len(t2i)
 
-log.pr_cyan("The vocabulary size is %d" %(nwords))
+# log.pr_cyan("The vocabulary size is %d" %(nwords))
+print("The vocabulary size is %d" %(nwords))
 
 if MODEL_TYPE == 'emb-att':
     model = EmbAttModel(nwords, EMB_SIZE, ntags)
@@ -525,7 +520,8 @@ for ITER in range(1, NUM_EPOCHS+1):
         best_epoch = ITER
 
         if TO_DUMP_ATTN:
-            log.pr_bmagenta("dumping attention maps")
+            # log.pr_bmagenta("dumping attention maps")
+            print("dumping attention maps")
             dump_attention_maps(train, prefix + "train.txt.attn." + MODEL_TYPE)
             dump_attention_maps(dev, prefix + "dev.txt.attn." + MODEL_TYPE)
             dump_attention_maps(test, prefix + "test.txt.attn." + MODEL_TYPE)

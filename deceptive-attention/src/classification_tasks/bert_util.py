@@ -23,7 +23,7 @@ class OccupationDataset(Dataset):
         self.text = pd.read_csv(self.path, sep="\t", header=None)
         self.transform = transform
         self.anonymization = anonymization
-        self.impermissible = ["he", "she", "her", "his", "him"]
+        self.impermissible = "he she her his him"
 
     def __len__(self):
         return len(self.text)
@@ -34,9 +34,11 @@ class OccupationDataset(Dataset):
 
         label, sentence = self.text.iloc[idx]
 
+        # if anonymization, we remove the impermissible words from each sentence
         if self.anonymization:
             splitted_sentence = sentence.split()
             sentence = ' '.join([i for i in splitted_sentence if i not in self.impermissible])
 
-        sample = {'sentence': sentence, 'label': label}
+        # return samples with sentence, label and impermissible words
+        sample = {'sentence': sentence, 'label': label, 'impermissible': self.impermissible}
         return sample

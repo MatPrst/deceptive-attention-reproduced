@@ -4,14 +4,15 @@ import os
 import random
 import time
 
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 import models
 import utils
+from batch_utils import *
 from gen_utils import *
 from models import Attention, Seq2Seq, Encoder, Decoder, DecoderNoAttn, DecoderUniform
 from utils import Language
@@ -38,11 +39,16 @@ parser.add_argument('--batch-size', dest='batch_size', type=int, default=128)
 parser.add_argument('--num-train', dest='num_train', type=int, default=1000000)
 parser.add_argument('--decode-with-no-attn', dest='no_attn_inference', action='store_true', default=True)
 
+parser.add_argument('--tensorboard_log', dest='tensorboard_log', type=bool, default=False)
+
 params = vars(parser.parse_args())
 TASK = params['task']
 DEBUG = params['debug']
 COEFF = params['loss_coeff']
 NUM_EPOCHS = params['epochs']
+TENSORBOARD_LOG = params['tensorboard_log']
+
+LOG_PATH = "logs/"
 
 long_type = torch.LongTensor
 float_type = torch.FloatTensor
@@ -134,7 +140,7 @@ def train_model(model, data, optimizer, criterion, coeff):
         src = torch.tensor(src).type(long_type).permute(1, 0)
         trg = torch.tensor(trg).type(long_type).permute(1, 0)
         alignment = torch.tensor(alignment).type(float_type).permute(1, 0, 2)
-        # algiment is not trg_len x batch_size x src_len
+        # alignment is not trg_len x batch_size x src_len
 
         optimizer.zero_grad()
 
@@ -272,7 +278,8 @@ def generate(model, data):
 def set_seed(seed):
     random.seed(seed)
     torch.manual_seed(seed)
-    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.determinstic = True
+    torch.backends.cudnn.benchmark = False
     models.set_seed(seed)
 
 
@@ -288,129 +295,7 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-def initialize_sentences(task, debug, num_train):
-    sentences = []
-
-    for sp in SPLITS:
-        src_filename = "./data/" + sp + "." + task + ".src"
-        trg_filename = "./data/" + sp + "." + task + ".trg"
-
-        src_sentences = open(src_filename).readlines()
-        trg_sentences = open(trg_filename).readlines()
-
-        alignment_filename = "./data/" + sp + "." + task + ".align"
-
-        alignment_sentences = open(alignment_filename).readlines()
-
-        if debug:  # small scale
-            src_sentences = src_sentences[:int(1e5)]
-            trg_sentences = trg_sentences[:int(1e5)]
-            alignment_sentences = alignment_sentences[: int(1e5)]
-
-        if sp == 'train':
-            src_sentences = src_sentences[:num_train]
-            trg_sentences = trg_sentences[:num_train]
-            alignment_sentences = alignment_sentences[:num_train]
-
-        sentences.append([src_sentences, trg_sentences, alignment_sentences])
-
-    # train_sentences = sentences[0]
-
-    '''
-    train_src_sents = train_sents[0]
-    train_trg_sents = train_sents[1]
-    train_alignments = train_sents[2]
-    top_src_words = compute_frequencies(train_src_sents, INPUT_VOCAB)
-    top_trg_words = compute_frequencies(train_trg_sents, OUTPUT_VOCAB)
-    
-    train_src_sents = unkify_lines(train_src_sents, top_src_words)
-    train_trg_sents = unkify_lines(train_trg_sents, top_trg_words)
-    train_sents = train_src_sents, train_trg_sents
-    '''
-
-    # dev_sentences = sentences[1]
-    # test_sentences = sentences[2]
-
-    return sentences
-
-
-def get_batches_from_sentences(sentences, batch_size):
-    train_sentences = sentences[0]
-    dev_sentences = sentences[1]
-    test_sentences = sentences[2]
-
-    train_batches = list(get_batches(train_sentences[0], train_sentences[1], train_sentences[2], batch_size))
-    SRC_LANG.stop_accepting_new_words()
-    TRG_LANG.stop_accepting_new_words()
-    dev_batches = list(get_batches(dev_sentences[0], dev_sentences[1], dev_sentences[2], batch_size))
-    test_batches = list(get_batches(test_sentences[0], test_sentences[1], test_sentences[2], batch_size))
-
-    return train_batches, dev_batches, test_batches
-
-
-def get_batches(src_sentences, trg_sentences, alignments, batch_size):
-    # parallel should be at least equal len
-    assert (len(src_sentences) == len(trg_sentences))
-
-    for b_idx in range(0, len(src_sentences), batch_size):
-
-        # get the slice
-        src_sample = src_sentences[b_idx: b_idx + batch_size]
-        trg_sample = trg_sentences[b_idx: b_idx + batch_size]
-        align_sample = alignments[b_idx: b_idx + batch_size]
-
-        # represent them
-        src_sample = [SRC_LANG.get_sent_rep(s) for s in src_sample]
-        trg_sample = [TRG_LANG.get_sent_rep(s) for s in trg_sample]
-
-        # sort by decreasing source len
-        sorted_ids = sorted(enumerate(src_sample), reverse=True, key=lambda x: len(x[1]))
-        src_sample = [src_sample[i] for i, v in sorted_ids]
-        trg_sample = [trg_sample[i] for i, v in sorted_ids]
-        align_sample = [align_sample[i] for i, v in sorted_ids]
-
-        src_len = [len(s) for s in src_sample]
-        trg_len = [len(t) for t in trg_sample]
-
-        # largeset seq len 
-        max_src_len = max(src_len)
-        max_trg_len = max(trg_len)
-
-        # pad the extra indices 
-        src_sample = SRC_LANG.pad_sequences(src_sample, max_src_len)
-        trg_sample = TRG_LANG.pad_sequences(trg_sample, max_trg_len)
-
-        # generated masks
-        aligned_outputs = []
-
-        for alignment in align_sample:
-            # print (alignment)
-            current_alignment = np.zeros([max_trg_len, max_src_len])
-
-            for pair in alignment.strip().split():
-                src_i, trg_j = pair.split("-")
-                src_i = min(int(src_i) + 1, max_src_len - 1)
-                trg_j = min(int(trg_j) + 1, max_trg_len - 1)
-                current_alignment[trg_j][src_i] = 1
-
-            aligned_outputs.append(current_alignment)
-
-        # numpy them
-        src_sample = np.array(src_sample, dtype=np.int64)
-        trg_sample = np.array(trg_sample, dtype=np.int64)
-        aligned_outputs = np.array(aligned_outputs)
-        # align output is batch_size x max target_len x max_src_len
-
-        assert (src_sample.shape[1] == max_src_len)
-
-        yield src_sample, src_len, trg_sample, trg_len, aligned_outputs
-
-
 def initialize_model(attention, encoder_emb_dim, decoder_emb_dim, encoder_hid_dim, decoder_hid_dim):
-    # --------------------------------------------------------#
-    # ------------------- define the model -------------------#
-    # --------------------------------------------------------#
-
     input_dim = SRC_LANG.get_vocab_size()
     output_dim = TRG_LANG.get_vocab_size()
     print(f"Input vocabulary size {input_dim} and output vocabulary size {output_dim}.")
@@ -436,14 +321,12 @@ def initialize_model(attention, encoder_emb_dim, decoder_emb_dim, encoder_hid_di
     model.apply(init_weights)
 
     # count the params
-    print(f'The model has {count_parameters(model):,} trainable parameters.')
+    print(f'The model has {count_parameters(model):,} trainable parameters.\n')
 
     optimizer = optim.Adam(model.parameters())
     criterion = nn.CrossEntropyLoss(ignore_index=PAD_IDX)
 
     return optimizer, criterion, model, suffix
-
-    # --------- end of model definition --------- #
 
 
 def train(task=TASK,
@@ -457,10 +340,16 @@ def train(task=TASK,
           encoder_emb_dim=ENC_EMB_DIM,
           decoder_emb_dim=DEC_EMB_DIM,
           encoder_hid_dim=ENC_HID_DIM,
-          decoder_hid_dim=DEC_HID_DIM):
+          decoder_hid_dim=DEC_HID_DIM,
+          tensorboard_log=TENSORBOARD_LOG):
+
+    writer = None
+    if tensorboard_log:
+        writer = SummaryWriter(LOG_PATH)
+
     print(f"Starting training..........")
     print(f"Configuration:\n num_epochs: {num_epochs}\n coeff: {coeff}\n seed: {seed}\n batch_size: "
-          f"{batch_size}\n attention: {attention}\n debug: {debug}\n num_train: {num_train}\n device: {DEVICE}")
+          f"{batch_size}\n attention: {attention}\n debug: {debug}\n num_train: {num_train}\n device: {DEVICE}\n")
 
     # load vocabulary if already present
     src_vocab_path = "data/" + task + '_coeff=' + str(coeff) + ".src.vocab"
@@ -472,9 +361,9 @@ def train(task=TASK,
     if os.path.exists(trg_vocab_path):
         TRG_LANG.load_vocab(trg_vocab_path)
 
-    sentences = initialize_sentences(task, debug, num_train)
+    sentences = initialize_sentences(task, debug, num_train, SPLITS)
 
-    train_batches, dev_batches, test_batches = get_batches_from_sentences(sentences, batch_size)
+    train_batches, dev_batches, test_batches = get_batches_from_sentences(sentences, batch_size, SRC_LANG, TRG_LANG)
 
     # setup the model
     optimizer, criterion, model, suffix = initialize_model(attention, encoder_emb_dim, decoder_emb_dim, encoder_hid_dim,
@@ -492,6 +381,12 @@ def train(task=TASK,
 
         train_loss, train_acc, train_attn_mass = train_model(model, train_batches, optimizer, criterion, coeff)
         valid_loss, val_acc, val_attn_mass = evaluate(model, dev_batches, criterion)
+
+        # if writer is not None:
+            # task =$task\_uniform_coeff = 0.0_seed =$seed
+            # tag = 'task: %s coeff: %s seed: %s' % (task, coeff, seed)
+            # writer.add_scalar('Loss/' + tag, train_loss, epoch)
+            # writer.add_scalar('Accuracy/' + tag, train_acc, epoch)
 
         end_time = time.time()
 
@@ -539,7 +434,7 @@ def train(task=TASK,
         print("generating the output translations from the model")
 
         test_sentences = sentences[2]
-        test_batches_single = list(get_batches(test_sentences[0], test_sentences[1], test_sentences[2], 1))
+        test_batches_single = list(get_batches(test_sentences, 1, SRC_LANG, TRG_LANG))
         output_lines = generate(model, test_batches_single)
 
         print("[done] .... now dumping the translations")
@@ -551,8 +446,13 @@ def train(task=TASK,
             fw.write(line.strip() + "\n")
         fw.close()
 
+    if writer is not None:
+        writer.close()
+
 
 def main():
+    # Create directories if not already existent
+
     if not os.path.exists('data'):
         os.makedirs('data')
 

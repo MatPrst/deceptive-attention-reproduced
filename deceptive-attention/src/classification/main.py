@@ -126,7 +126,7 @@ UNK = w2i["<unk>"]
 
 
 def read_dataset(data_file, block_words=None, block_file=None, attn_file=None, clip_vocab=False):
-    data_lines = open(data_file).readlines()
+    data_lines = open(data_file, encoding="utf-8").readlines()
     global w2i
 
     if clip_vocab:

@@ -2,7 +2,6 @@ import argparse
 import math
 import os
 import random
-import sys
 import time
 
 import torch
@@ -15,14 +14,9 @@ import models
 import utils
 from batch_utils import *
 from gen_utils import *
+from log_utils import *
 from models import Attention, Seq2Seq, Encoder, Decoder, DecoderNoAttn, DecoderUniform
 from utils import Language
-
-p = os.path.abspath('../..')
-if p not in sys.path:
-    sys.path.append(p)
-
-from logging.log_utils import *
 
 # import log
 

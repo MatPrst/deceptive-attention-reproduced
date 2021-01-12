@@ -2,6 +2,7 @@ import argparse
 import math
 import os
 import random
+import sys
 import time
 
 import torch
@@ -14,9 +15,14 @@ import models
 import utils
 from batch_utils import *
 from gen_utils import *
-from log_utils import *
 from models import Attention, Seq2Seq, Encoder, Decoder, DecoderNoAttn, DecoderUniform
 from utils import Language
+
+p = os.path.abspath('../..')
+if p not in sys.path:
+    sys.path.append(p)
+
+from logging.log_utils import *
 
 # import log
 
@@ -347,7 +353,7 @@ def train(task=TASK,
     if tensorboard_log:
         writer = SummaryWriter(LOG_PATH)
 
-    logger = setup_logger("log/", task, coeff, seed)
+    logger = setup_logger("log/", 'task=%s_coeff=%s_seed=%s' % (task, coeff, seed))
 
     logger.info("Starting training..........")
     logger.info(f'Configuration:\n num_epochs: {num_epochs}\n coeff: {coeff}\n seed: {seed}\n batch_size: ' +

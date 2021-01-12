@@ -3,7 +3,7 @@
 This repository and paper have been conducted during the Fairness, Accountability, Confidentiality and Transparency (FACT) course at University of Amsterdam. 
 Starting off with reproducing the original paper `Learning to Deceive with Attention-Based Explanations` we extend upon it with <TODO>.
 
-## Setup
+## Environment Configuration
 
 In order to run the code either create an Anaconda environment:
 
@@ -17,7 +17,19 @@ or create a new environment and install all required packages with:
 pip install -r requirements.txt
 ```
 
+## Visualizing Results
+
+We provide an IPython notebook detailing all results from our reproducibility report. 
+Start your jupyter server and run all cells in `deceptive-attention/src/experiments.ipynb`to reproduce the reported results.
+
 ## Running Experiments
+
+## Datasets
+
+## Verifying the Implementation
+
+- TODO
+- Describe Unit tests?
 
 ## Authors
 

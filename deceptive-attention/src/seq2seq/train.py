@@ -38,7 +38,7 @@ parser.add_argument('--attention', dest='attention', type=str, default='dot-prod
 
 parser.add_argument('--batch-size', dest='batch_size', type=int, default=128)
 parser.add_argument('--num-train', dest='num_train', type=int, default=1000000)
-parser.add_argument('--decode-with-no-attn', dest='no_attn_inference', action='store_true', default=True)
+parser.add_argument('--decode-with-no-attn', dest='no_attn_inference', action='store_true')
 
 parser.add_argument('--tensorboard_log', dest='tensorboard_log', type=bool, default=False)
 

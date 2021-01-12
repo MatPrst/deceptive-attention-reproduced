@@ -34,7 +34,7 @@ parser.add_argument('--seed', dest='seed', type=int, default=1234)
 
 # parser.add_argument('--uniform', dest='uniform', action='store_true')
 # parser.add_argument('--no-attn', dest='no_attn', action='store_true')
-parser.add_argument('--attention', dest='attention', action='store_true', default='head-by-head')
+parser.add_argument('--attention', dest='attention', action='store_true', default='dot-product')
 
 parser.add_argument('--batch-size', dest='batch_size', type=int, default=128)
 parser.add_argument('--num-train', dest='num_train', type=int, default=1000000)
@@ -207,7 +207,7 @@ def evaluate(model, data, criterion):
             alignment = torch.tensor(alignment).type(float_type).permute(1, 0, 2)
             # alignment is not trg_len x batch_size x src_len
 
-            # output, attention = model(src, src_len, None, 0) #turn off teacher forcing
+            # output, attention = model(src, src_len, None, 0) # turn off teacher forcing
             output, attention = model(src, src_len, trg, 0)  # turn off teacher forcing
             # NOTE: it is not a bug to not count extra produce from the model, beyond target len
 
@@ -279,8 +279,11 @@ def generate(model, data):
 def set_seed(seed):
     random.seed(seed)
     torch.manual_seed(seed)
-    torch.backends.cudnn.determinstic = True
-    torch.backends.cudnn.benchmark = False
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
     models.set_seed(seed)
 
 
@@ -343,11 +346,14 @@ def train(task=TASK,
           encoder_hid_dim=ENC_HID_DIM,
           decoder_hid_dim=DEC_HID_DIM,
           tensorboard_log=TENSORBOARD_LOG):
+
+    set_seed(SEED)
+
     writer = None
     if tensorboard_log:
-        writer = SummaryWriter(LOG_PATH)
+        writer = SummaryWriter(LOG_PATH + 'tensorboard/')
 
-    logger = setup_logger("log/", 'task=%s_coeff=%s_seed=%s' % (task, coeff, seed))
+    logger = setup_logger(LOG_PATH, 'task=%s_coeff=%s_seed=%s' % (task, coeff, seed))
 
     logger.info("Starting training..........")
     logger.info(f'Configuration:\n num_epochs: {num_epochs}\n coeff: {coeff}\n seed: {seed}\n batch_size: ' +
@@ -382,24 +388,28 @@ def train(task=TASK,
         start_time = time.time()
 
         train_loss, train_acc, train_attn_mass = train_model(model, train_batches, optimizer, criterion, coeff)
-        valid_loss, val_acc, val_attn_mass = evaluate(model, dev_batches, criterion)
+        val_loss, val_acc, val_attn_mass = evaluate(model, dev_batches, criterion)
 
         if writer is not None:
-            # task =$task\_uniform_coeff = 0.0_seed =$seed
-            # tag = 'task: %s coeff: %s seed: %s' % (task, coeff, seed)
-            # writer.add_scalar('Loss/' + tag, train_loss, epoch)
-            # writer.add_scalar('Accuracy/' + tag, train_acc, epoch)
             writer.add_scalar("Loss/train", train_loss, epoch)
             writer.add_scalar("Accuracy/train", train_acc, epoch)
+            writer.add_scalar("AttentionMass/train", train_attn_mass, epoch)
 
-            writer.add_hparams({"lr": "learning_rate", "bsize": batch_size, "task": task, "coeff": coeff, "seed": seed})
+
+            # writer.add_hparams({"lr": "learning_rate", "bsize": batch_size, "task": task, "coeff": coeff, "seed": seed},
+            #                    {})
+                               # {'accuracy': train_acc, 'loss': train_loss})
+
+            writer.add_scalar("Loss/valid", val_loss, epoch)
+            writer.add_scalar("Accuracy/valid", val_acc, epoch)
+            writer.add_scalar("AttentionMass/valid", val_attn_mass, epoch)
 
         end_time = time.time()
 
         epoch_minutes, epoch_secs = epoch_time(start_time, end_time)
 
-        if valid_loss < best_valid_loss:
-            best_valid_loss = valid_loss
+        if val_loss < best_valid_loss:
+            best_valid_loss = val_loss
             torch.save(model.state_dict(), 'data/models/model_' + task + suffix + '_seed=' + str(seed) + '_coeff='
                        + str(coeff) + '_num-train=' + str(num_train) + '.pt')
             epochs_taken_to_converge = epoch + 1
@@ -414,8 +424,8 @@ def train(task=TASK,
         logger.info(f'Epoch: {epoch + 1:02} | Time: {epoch_minutes}m {epoch_secs}s')
         logger.info(f'\tTrain Loss: {train_loss:.3f} | Train Acc: {train_acc:0.2f} \
             | Train Attn Mass: {train_attn_mass:0.2f} | Train PPL: {math.exp(train_loss):7.3f}')
-        logger.info(f'\t Val. Loss: {valid_loss:.3f} |   Val Acc: {val_acc:0.2f} \
-            |  Val. Attn Mass: {val_attn_mass:0.2f} |  Val. PPL: {math.exp(valid_loss):7.3f}')
+        logger.info(f'\t Val. Loss: {val_loss:.3f} |   Val Acc: {val_acc:0.2f} \
+            |  Val. Attn Mass: {val_attn_mass:0.2f} |  Val. PPL: {math.exp(val_loss):7.3f}')
 
     # load the best model and print stats:
     model.load_state_dict(torch.load('data/models/model_' + task + suffix + '_seed=' + str(seed) + '_coeff='

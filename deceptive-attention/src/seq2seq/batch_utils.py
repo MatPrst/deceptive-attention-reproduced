@@ -43,7 +43,6 @@ def initialize_sentences(task, debug, num_train, splits):
 
     # dev_sentences = sentences[1]
     # test_sentences = sentences[2]
-    print(len(sentences))
     return sentences
 
 

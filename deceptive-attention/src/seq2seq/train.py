@@ -14,6 +14,7 @@ import models
 import utils
 from batch_utils import *
 from gen_utils import *
+from log_utils import *
 from models import Attention, Seq2Seq, Encoder, Decoder, DecoderNoAttn, DecoderUniform
 from utils import Language
 
@@ -295,10 +296,10 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-def initialize_model(attention, encoder_emb_dim, decoder_emb_dim, encoder_hid_dim, decoder_hid_dim):
+def initialize_model(attention, encoder_emb_dim, decoder_emb_dim, encoder_hid_dim, decoder_hid_dim, logger):
     input_dim = SRC_LANG.get_vocab_size()
     output_dim = TRG_LANG.get_vocab_size()
-    print(f"Input vocabulary size {input_dim} and output vocabulary size {output_dim}.")
+    logger.info(f"Input vocabulary size {input_dim} and output vocabulary size {output_dim}.")
 
     suffix = ""
 
@@ -321,7 +322,7 @@ def initialize_model(attention, encoder_emb_dim, decoder_emb_dim, encoder_hid_di
     model.apply(init_weights)
 
     # count the params
-    print(f'The model has {count_parameters(model):,} trainable parameters.\n')
+    logger.info(f'The model has {count_parameters(model):,} trainable parameters.\n')
 
     optimizer = optim.Adam(model.parameters())
     criterion = nn.CrossEntropyLoss(ignore_index=PAD_IDX)
@@ -342,14 +343,15 @@ def train(task=TASK,
           encoder_hid_dim=ENC_HID_DIM,
           decoder_hid_dim=DEC_HID_DIM,
           tensorboard_log=TENSORBOARD_LOG):
-
     writer = None
     if tensorboard_log:
         writer = SummaryWriter(LOG_PATH)
 
-    print(f"Starting training..........")
-    print(f"Configuration:\n num_epochs: {num_epochs}\n coeff: {coeff}\n seed: {seed}\n batch_size: "
-          f"{batch_size}\n attention: {attention}\n debug: {debug}\n num_train: {num_train}\n device: {DEVICE}\n")
+    logger = setup_logger("log/", task, coeff, seed)
+
+    logger.info("Starting training..........")
+    logger.info(f'Configuration:\n num_epochs: {num_epochs}\n coeff: {coeff}\n seed: {seed}\n batch_size: ' +
+                f'{batch_size}\n attention: {attention}\n debug: {debug}\n num_train: {num_train}\n device: {DEVICE}\n')
 
     # load vocabulary if already present
     src_vocab_path = "data/" + task + '_coeff=' + str(coeff) + ".src.vocab"
@@ -367,7 +369,7 @@ def train(task=TASK,
 
     # setup the model
     optimizer, criterion, model, suffix = initialize_model(attention, encoder_emb_dim, decoder_emb_dim, encoder_hid_dim,
-                                                           decoder_hid_dim)
+                                                           decoder_hid_dim, logger)
 
     best_valid_loss = float('inf')
     convergence_time = 0.0
@@ -382,11 +384,15 @@ def train(task=TASK,
         train_loss, train_acc, train_attn_mass = train_model(model, train_batches, optimizer, criterion, coeff)
         valid_loss, val_acc, val_attn_mass = evaluate(model, dev_batches, criterion)
 
-        # if writer is not None:
+        if writer is not None:
             # task =$task\_uniform_coeff = 0.0_seed =$seed
             # tag = 'task: %s coeff: %s seed: %s' % (task, coeff, seed)
             # writer.add_scalar('Loss/' + tag, train_loss, epoch)
             # writer.add_scalar('Accuracy/' + tag, train_acc, epoch)
+            writer.add_scalar("Loss/train", train_loss, epoch)
+            writer.add_scalar("Accuracy/train", train_acc, epoch)
+
+            writer.add_hparams({"lr": "learning_rate", "bsize": batch_size, "task": task, "coeff": coeff, "seed": seed})
 
         end_time = time.time()
 
@@ -405,10 +411,10 @@ def train(task=TASK,
                 break
             no_improvement_last_time = True
 
-        print(f'Epoch: {epoch + 1:02} | Time: {epoch_minutes}m {epoch_secs}s')
-        print(f'\tTrain Loss: {train_loss:.3f} | Train Acc: {train_acc:0.2f} \
+        logger.info(f'Epoch: {epoch + 1:02} | Time: {epoch_minutes}m {epoch_secs}s')
+        logger.info(f'\tTrain Loss: {train_loss:.3f} | Train Acc: {train_acc:0.2f} \
             | Train Attn Mass: {train_attn_mass:0.2f} | Train PPL: {math.exp(train_loss):7.3f}')
-        print(f'\t Val. Loss: {valid_loss:.3f} |   Val Acc: {val_acc:0.2f} \
+        logger.info(f'\t Val. Loss: {valid_loss:.3f} |   Val Acc: {val_acc:0.2f} \
             |  Val. Attn Mass: {val_attn_mass:0.2f} |  Val. PPL: {math.exp(valid_loss):7.3f}')
 
     # load the best model and print stats:
@@ -416,13 +422,13 @@ def train(task=TASK,
                                      + str(coeff) + '_num-train=' + str(num_train) + '.pt'))
 
     test_loss, test_acc, test_attn_mass = evaluate(model, test_batches, criterion)
-    print(f'\t Test Loss: {test_loss:.3f} |  Test Acc: {test_acc:0.2f} \
+    logger.info(f'\t Test Loss: {test_loss:.3f} |  Test Acc: {test_acc:0.2f} \
             |  Test Attn Mass: {test_attn_mass:0.2f} |  Test PPL: {math.exp(test_loss):7.3f}')
 
-    print(f"Final Test Accuracy ..........\t{test_acc:0.2f}")
-    print(f"Final Test Attention Mass ....\t{test_attn_mass:0.2f}")
-    print(f"Convergence time in seconds ..\t{convergence_time:0.2f}")
-    print(f"Sample efficiency in epochs ..\t{epochs_taken_to_converge}")
+    logger.info(f"Final Test Accuracy ..........\t{test_acc:0.2f}")
+    logger.info(f"Final Test Attention Mass ....\t{test_attn_mass:0.2f}")
+    logger.info(f"Convergence time in seconds ..\t{convergence_time:0.2f}")
+    logger.info(f"Sample efficiency in epochs ..\t{epochs_taken_to_converge}")
 
     SRC_LANG.save_vocab("data/vocab/" + task + suffix + '_seed=' + str(seed)
                         + '_coeff=' + str(coeff) + '_num-train=' + str(num_train) + ".src.vocab")
@@ -431,13 +437,13 @@ def train(task=TASK,
 
     if task in ['en-hi', 'en-de']:
         # generate the output to compute bleu scores as well...
-        print("generating the output translations from the model")
+        logger.info("generating the output translations from the model")
 
         test_sentences = sentences[2]
         test_batches_single = list(get_batches(test_sentences, 1, SRC_LANG, TRG_LANG))
         output_lines = generate(model, test_batches_single)
 
-        print("[done] .... now dumping the translations")
+        logger.info("[done] .... now dumping the translations")
 
         outfile = "data/" + task + suffix + "_seed" + str(seed) + '_coeff=' + str(coeff) + '_num-train=' \
                   + str(num_train) + ".test.out"
@@ -452,6 +458,9 @@ def train(task=TASK,
 
 def main():
     # Create directories if not already existent
+
+    if not os.path.exists('log'):
+        os.makedirs('log')
 
     if not os.path.exists('data'):
         os.makedirs('data')

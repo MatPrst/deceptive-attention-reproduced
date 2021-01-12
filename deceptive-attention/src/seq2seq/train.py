@@ -34,7 +34,7 @@ parser.add_argument('--seed', dest='seed', type=int, default=1234)
 
 # parser.add_argument('--uniform', dest='uniform', action='store_true')
 # parser.add_argument('--no-attn', dest='no_attn', action='store_true')
-parser.add_argument('--attention', dest='attention', action='store_true', default='dot-product')
+parser.add_argument('--attention', dest='attention', type=str, default='dot-product')
 
 parser.add_argument('--batch-size', dest='batch_size', type=int, default=128)
 parser.add_argument('--num-train', dest='num_train', type=int, default=1000000)
@@ -469,8 +469,8 @@ def train(task=TASK,
 def main():
     # Create directories if not already existent
 
-    if not os.path.exists('log'):
-        os.makedirs('log')
+    if not os.path.exists(LOG_PATH):
+        os.makedirs(LOG_PATH)
 
     if not os.path.exists('data'):
         os.makedirs('data')

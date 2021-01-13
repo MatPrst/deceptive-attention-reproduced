@@ -306,7 +306,7 @@ def initialize_model(attention, encoder_emb_dim, decoder_emb_dim, encoder_hid_di
 
     suffix = ""
 
-    attn = Attention(encoder_hid_dim, decoder_emb_dim)
+    attn = Attention(encoder_hid_dim, decoder_hid_dim)
     enc = Encoder(input_dim, encoder_emb_dim, encoder_hid_dim, decoder_hid_dim, ENC_DROPOUT)
 
     if attention == 'uniform':

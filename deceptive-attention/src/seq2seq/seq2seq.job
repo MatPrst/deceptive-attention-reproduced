@@ -19,4 +19,4 @@ source activate attention
 
 PARAMETERS_FILE=job_parameters/bin_flip_parameters.txt
 
-srun python -u ../train.py $(head -$SLURM_ARRAY_TASK_ID $PARAMETERS_FILE | tail -1)
+srun python -u train.py $(head -$SLURM_ARRAY_TASK_ID $PARAMETERS_FILE | tail -1)

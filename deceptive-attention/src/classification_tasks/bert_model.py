@@ -21,13 +21,13 @@ class BERTModel(nn.Module):
         self.penalize = penalize
         if self.penalize:
             # if we're penalizing the model's attending to impermissible tokens,
-            # we want to overwrite the original self-attention module with a local module
+            # we want to overwrite the original self-attention module in the transformers module with a local module
             # to ensure the restriction of information flow
             transformers.models.bert.modeling_bert.BertSelfAttention = BertSelfAttention_Altered
 
         # load pretrained uncased model
         self.encoder = AutoModel.from_pretrained('bert-base-uncased')
-        self.l1 = nn.Linear(768, 2)
+        self.l1 = nn.Linear(in_features=768, out_features=2)
 
         # verify that self attention mechanism is now handled by the local module
         # print(self.encoder._modules['encoder'].layer[0].attention.self)
@@ -39,4 +39,5 @@ class BERTModel(nn.Module):
             output = self.encoder(x, output_attentions=True)
 
         y = self.l1(output.pooler_output)
+
         return y, output.attentions

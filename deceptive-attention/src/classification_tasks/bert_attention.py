@@ -90,7 +90,7 @@ class BertSelfAttention_Altered(nn.Module):
         # Normalize the attention scores to probabilities.
         attention_probs = nn.Softmax(dim=-1)(attention_scores)
 
-        print(attention_probs.shape)
+        # print(attention_probs.shape)
         #
         # print(attention_probs[0][0].shape)
         # sys.exit()

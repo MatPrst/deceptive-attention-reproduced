@@ -6,7 +6,26 @@ import pandas as pd
 
 #TODO: implement Dataset object for SST task
 
-#TODO: implement tokenizer function
+
+def generate_mask(tokenized_sents_ids, tokenized_impermissible_ids):
+
+    batch_size, seq_length = tokenized_sents_ids.shape
+
+    # for i in range(batch_size):
+    #
+    #     # print(tokenized_sents_ids[i])
+    #
+    #     print(tokenized_impermissible_ids[i])
+    #
+    #     for ids in tokenized_impermissible_ids[i]:
+    #         print(AutoTokenizer.from_pretrained('bert-base-uncased').decode(ids))
+    #
+    #     # id 101 = [CLS]
+    #     # id 102 = [SEP]
+    #
+    #     sys.exit()
+
+    return 2
 
 class OccupationDataset(Dataset):
     """Occupation Classification dataset."""

@@ -1,0 +1,8 @@
+--num-epochs 30 --task binary-flip --seed 1 --loss-coef 0.0 --debug
+--num-epochs 30 --task binary-flip --seed 1 --loss-coef 0.1 --debug
+--num-epochs 30 --task binary-flip --seed 1 --loss-coef 1.0 --debug
+--num-epochs 30 --task binary-flip --seed 5 --loss-coef 0.0 --debug
+--num-epochs 30 --task binary-flip --seed 5 --loss-coef 0.1 --debug
+--num-epochs 30 --task binary-flip --seed 5 --loss-coef 1.0 --debug
+
+

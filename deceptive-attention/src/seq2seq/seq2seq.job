@@ -7,7 +7,7 @@
 #SBATCH --cpus-per-task=3
 #SBATCH --time=32:00:00
 #SBATCH --mem=32000M
-#SBATCH --array=1-7%2
+#SBATCH --array=1-25%2
 #SBATCH --output=job_outputs/slurm_seq2seq_%A_%a.out
 
 module purge
@@ -17,6 +17,6 @@ module load Anaconda3
 
 source activate attention
 
-PARAMETERS_FILE=job_parameters/bin_flip_parameters.txt
+PARAMETERS_FILE=job_parameters/parameters.txt
 
 srun python -u train.py $(head -$SLURM_ARRAY_TASK_ID $PARAMETERS_FILE | tail -1)

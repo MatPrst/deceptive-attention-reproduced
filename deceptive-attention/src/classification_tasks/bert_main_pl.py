@@ -100,8 +100,8 @@ def main(args):
     model = BERTModel(penalize=config.penalize)
 
     # Crude logic to freeze all the BERT parameters
-    for param in model.encoder.parameters():
-        param.requires_grad = False
+    # for param in model.encoder.parameters():
+    #     param.requires_grad = False
 
     trainer = Trainer()
     datamodule = GenericDataModule(task=config.task,

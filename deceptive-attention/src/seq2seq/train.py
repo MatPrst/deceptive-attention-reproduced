@@ -46,7 +46,7 @@ params = vars(parser.parse_args())
 TASK = params['task']
 DEBUG = params['debug']
 COEFF = params['loss_coeff']
-NUM_EPOCHS = params['epochs']
+EPOCHS = params['epochs']
 TENSORBOARD_LOG = params['tensorboard_log']
 
 LOG_PATH = "logs/"
@@ -334,7 +334,7 @@ def initialize_model(attention, encoder_emb_dim, decoder_emb_dim, encoder_hid_di
 
 
 def train(task=TASK,
-          num_epochs=NUM_EPOCHS,
+          epochs=EPOCHS,
           coeff=COEFF,
           seed=SEED,
           batch_size=BATCH_SIZE,
@@ -355,7 +355,7 @@ def train(task=TASK,
     logger = setup_logger(LOG_PATH, 'task=%s_coeff=%s_seed=%s' % (task, coeff, seed))
 
     logger.info("Starting training..........")
-    logger.info(f'Configuration:\n num_epochs: {num_epochs}\n coeff: {coeff}\n seed: {seed}\n batch_size: ' +
+    logger.info(f'Configuration:\n epochs: {epochs}\n coeff: {coeff}\n seed: {seed}\n batch_size: ' +
                 f'{batch_size}\n attention: {attention}\n debug: {debug}\n num_train: {num_train}\n device: {DEVICE}\n '
                 f'task: {task}\n')
 
@@ -383,7 +383,7 @@ def train(task=TASK,
 
     no_improvement_last_time = False
 
-    for epoch in range(num_epochs):
+    for epoch in range(epochs):
 
         start_time = time.time()
 

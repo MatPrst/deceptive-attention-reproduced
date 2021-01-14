@@ -1,6 +1,8 @@
 import pickle
 from collections import defaultdict
 
+import nltk
+
 PAD_token = 0
 SOS_token = 1
 EOS_token = 2
@@ -66,3 +68,7 @@ class Language:
     def pad_sequence(seq, max_len):
         padded_seq = seq + [PAD_token] * (max_len - len(seq))
         return padded_seq[:max_len]
+
+
+def bleu_score(reference_tokens, candidate_tokens):
+    return nltk.translate.bleu_score.sentence_bleu(reference_tokens, candidate_tokens)

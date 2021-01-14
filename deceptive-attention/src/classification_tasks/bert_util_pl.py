@@ -64,11 +64,11 @@ class GenericDataModule(pl.LightningDataModule):
             self.test = OccupationDataset(dataset='test', anonymization=self.anonymization)
 
     def train_dataloader(self):
-        return DataLoader(self.train, batch_size=self.batch_size, num_workers=8)
+        return DataLoader(self.train, batch_size=self.batch_size, num_workers=4)
 
     def val_dataloader(self):
-        return DataLoader(self.val, batch_size=self.batch_size, num_workers=8)
+        return DataLoader(self.val, batch_size=self.batch_size, num_workers=4)
 
     def test_dataloader(self):
-        return DataLoader(self.test, batch_size=self.batch_size, num_workers=8)
+        return DataLoader(self.test, batch_size=self.batch_size, num_workers=4)
 

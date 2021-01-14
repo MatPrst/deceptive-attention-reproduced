@@ -346,7 +346,6 @@ def train(task=TASK,
           encoder_hid_dim=ENC_HID_DIM,
           decoder_hid_dim=DEC_HID_DIM,
           tensorboard_log=TENSORBOARD_LOG):
-
     set_seed(SEED)
 
     writer = None
@@ -357,7 +356,8 @@ def train(task=TASK,
 
     logger.info("Starting training..........")
     logger.info(f'Configuration:\n num_epochs: {num_epochs}\n coeff: {coeff}\n seed: {seed}\n batch_size: ' +
-                f'{batch_size}\n attention: {attention}\n debug: {debug}\n num_train: {num_train}\n device: {DEVICE}\n')
+                f'{batch_size}\n attention: {attention}\n debug: {debug}\n num_train: {num_train}\n device: {DEVICE}\n '
+                f'task: {task}\n')
 
     # load vocabulary if already present
     src_vocab_path = "data/" + task + '_coeff=' + str(coeff) + ".src.vocab"
@@ -395,10 +395,9 @@ def train(task=TASK,
             writer.add_scalar("Accuracy/train", train_acc, epoch)
             writer.add_scalar("AttentionMass/train", train_attn_mass, epoch)
 
-
             # writer.add_hparams({"lr": "learning_rate", "bsize": batch_size, "task": task, "coeff": coeff, "seed": seed},
             #                    {})
-                               # {'accuracy': train_acc, 'loss': train_loss})
+            # {'accuracy': train_acc, 'loss': train_loss})
 
             writer.add_scalar("Loss/valid", val_loss, epoch)
             writer.add_scalar("Accuracy/valid", val_acc, epoch)

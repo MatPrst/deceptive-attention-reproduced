@@ -1,7 +1,7 @@
 import pickle
 from collections import defaultdict
 
-import nltk
+# import nltk
 
 PAD_token = 0
 SOS_token = 1
@@ -70,5 +70,5 @@ class Language:
         return padded_seq[:max_len]
 
 
-def bleu_score(reference_tokens, candidate_tokens):
-    return nltk.translate.bleu_score.sentence_bleu(reference_tokens, candidate_tokens)
+# def bleu_score(reference_tokens, candidate_tokens):
+#     return nltk.translate.bleu_score.sentence_bleu(reference_tokens, candidate_tokens)

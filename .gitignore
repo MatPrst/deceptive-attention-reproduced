@@ -137,3 +137,4 @@ dmypy.json
 # temporary files
 logs/
 tensorboard/
+vocab/

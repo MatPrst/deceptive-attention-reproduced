@@ -4,6 +4,7 @@ import os
 import random
 import time
 
+import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -293,6 +294,8 @@ def set_seed(seed):
         torch.backends.cudnn.benchmark = False
     models.set_seed(seed)
 
+    pl.seed_everything(seed)
+
 
 def init_weights(m):
     for name, param in m.named_parameters():
@@ -487,19 +490,11 @@ def train(task=TASK,
 def main():
     # Create directories if not already existent
 
-    if not os.path.exists(LOG_PATH):
-        os.makedirs(LOG_PATH)
-
-    if not os.path.exists(DATA_PATH):
-        os.makedirs(DATA_PATH)
-
-    if not os.path.exists(DATA_MODELS_PATH):
-        os.makedirs(DATA_MODELS_PATH)
-
-    if not os.path.exists(DATA_VOCAB_PATH):
-        os.makedirs(DATA_VOCAB_PATH)
+    os.makedirs(LOG_PATH, exist_ok=True)
+    os.makedirs(DATA_PATH, exist_ok=True)
+    os.makedirs(DATA_MODELS_PATH, exist_ok=True)
+    os.makedirs(DATA_VOCAB_PATH, exist_ok=True)
 
     train()
-
 
 if __name__ == "__main__": main()

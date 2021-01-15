@@ -114,16 +114,24 @@ print("Task: %s" %(TASK_NAME))
 print("Model: %s" %(MODEL_TYPE))
 print("Coef (hammer): %0.2f" %(C_HAMMER))
 print("Coef (random-entropy): %0.2f" %(C_ENTROPY))
+print("Seed: %0.2f" %(SEED))
 
-np.random.seed(SEED)
-random.seed(SEED)
-torch.manual_seed(SEED)
+def set_seed(seed):
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+    
+    torch.backends.cudnn.determinstic = True
+    torch.backends.cudnn.benchmark = False
+
+set_seed(SEED)
 
 w2i = defaultdict(lambda: len(w2i))
 w2c = defaultdict(lambda: 0.0) # word to count
 t2i = defaultdict(lambda: len(t2i))
 UNK = w2i["<unk>"]
-
 
 def read_dataset(data_file, block_words=None, block_file=None, attn_file=None, clip_vocab=False):
     data_lines = open(data_file, encoding="utf-8").readlines()

@@ -14,6 +14,7 @@ from models import EmbAttModel, BiLSTMAttModel, BiLSTMModel
 import pickle
 
 import util
+from log_utils import setup_logger
 
 
 # parsing stuff from the command line
@@ -83,6 +84,7 @@ params = vars(parser.parse_args())
 
 # useful constants
 SEED = params['seed']
+LOG_PATH = "logs/"
 
 # user specified constants
 C_ENTROPY = params['loss_entropy']
@@ -109,12 +111,13 @@ FLOW = params['flow']
 CLIP_VOCAB = params['clip_vocab']
 VOCAB_SIZE = params['vocab_size']
 
-# print useful info
-print("Task: %s" %(TASK_NAME))
-print("Model: %s" %(MODEL_TYPE))
-print("Coef (hammer): %0.2f" %(C_HAMMER))
-print("Coef (random-entropy): %0.2f" %(C_ENTROPY))
-print("Seed: %0.2f" %(SEED))
+logger = setup_logger(LOG_PATH, f"task={TASK_NAME}__model={MODEL_TYPE}_hammer={C_HAMMER}_seed={SEED}")
+
+logger.info(f"Task: {TASK_NAME}")
+logger.info(f"Model: {MODEL_TYPE}")
+logger.info(f"Coef (hammer): {C_HAMMER:0.2f}")
+logger.info(f"Coef (random-entropy): {C_ENTROPY:0.2f}")
+logger.info(f"Seed: {SEED}")
 
 def set_seed(seed):
     np.random.seed(seed)
@@ -218,7 +221,7 @@ def calc_entropy_loss(p, beta):
     return -1 * beta * entropy(p)
 
 def evaluate(dataset, iter, name='test', attn_stats=False, num_vis=0):
-    print ("evaluating on %s set" %(name))
+    logger.info(f"evaluating on {name} set")
     # Perform testing
     test_correct = 0.0
     test_base_prop = 0.0
@@ -233,10 +236,10 @@ def evaluate(dataset, iter, name='test', attn_stats=False, num_vis=0):
     total_loss = 0.0
     if num_vis > 0 and UNDERSTAND:
         wts, bias = model.get_linear_wts()
-        print ("Weights below")
-        print (wts.detach().cpu().numpy())
-        print ("bias below")
-        print (bias.detach().cpu().numpy())
+        logger.info("Weights below")
+        logger.info(wts.detach().cpu().numpy())
+        logger.info("bias below")
+        logger.info(bias.detach().cpu().numpy())
     for idx, words, block_ids, attn_orig , tag in dataset:
         words_t = torch.tensor([words]).type(type)
         tag_t = torch.tensor([tag]).type(type)
@@ -294,7 +297,7 @@ def evaluate(dataset, iter, name='test', attn_stats=False, num_vis=0):
                     for emb in word_embeddings[j]:
                         temp_list.append(emb)
                     tabulated_list.append(temp_list)
-                print (tabulate(tabulated_list, headers=headers))
+                logger.info(tabulate(tabulated_list, headers=headers))
 
 
         base_prop, attn_prop = quantify_attention(words, attention.detach().cpu().numpy(), block_ids)
@@ -310,8 +313,8 @@ def evaluate(dataset, iter, name='test', attn_stats=False, num_vis=0):
         test_base_h_norm += base_h_norm
         test_attn_h_norm += attn_h_norm
 
-    print("iter %r: %s acc = %.2f" % (iter, name, 100.*test_correct/len(dataset)))
-    print("iter %r: %s loss = %.8f" % (iter, name, total_loss/len(dataset)))
+    logger.info("iter %r: %s acc = %.2f" % (iter, name, 100.*test_correct/len(dataset)))
+    logger.info("iter %r: %s loss = %.8f" % (iter, name, total_loss/len(dataset)))
 
     '''
     outfile_name = "examples/" + TASK_NAME + "_" + MODEL_TYPE + "_hammer=" + str(C_HAMMER) \
@@ -321,19 +324,19 @@ def evaluate(dataset, iter, name='test', attn_stats=False, num_vis=0):
     '''
 
     if attn_stats:
-        print("iter %r: in %s set base_ratio = %.8f, attention_ratio = %.14f" % (
+        logger.info("iter %r: in %s set base_ratio = %.8f, attention_ratio = %.14f" % (
             iter,
 			name,
             test_base_prop/len(dataset),
             test_attn_prop/len(dataset)))
 
-        print("iter %r: in %s set base_emb_norm = %.4f, attn_emb_norm = %.4f" % (
+        logger.info("iter %r: in %s set base_emb_norm = %.4f, attn_emb_norm = %.4f" % (
             iter,
 			name,
             test_base_emb_norm/len(dataset),
             test_attn_emb_norm/len(dataset)))
 
-        print("iter %r: in %s set base_h_norm = %.4f, attn_h_norm = %.4f" % (
+        logger.info("iter %r: in %s set base_h_norm = %.4f, attn_h_norm = %.4f" % (
             iter,
 			name,
             test_base_h_norm/len(dataset),
@@ -364,7 +367,7 @@ prefix = "data/" + TASK_NAME + "/"
 
 if USE_BLOCK_FILE:
     # log.pr_blue("Using block file")
-    print("Using block file")
+    logger.info("Using block file")
     train = list(read_dataset(prefix+"train.txt",
                 block_file=prefix + "train.txt.block", clip_vocab=CLIP_VOCAB))
     w2i = defaultdict(lambda: UNK, w2i)
@@ -377,7 +380,7 @@ if USE_BLOCK_FILE:
                 block_file=prefix + "test.txt.block"))
 elif USE_ATTN_FILE:
     # log.pr_blue("Using attn file")
-    print("Using attn file")
+    logger.info("Using attn file")
     train = list(read_dataset(prefix+"train.txt", block_words=BLOCK_WORDS,
                 attn_file=prefix + "train.txt.attn." + MODEL_TYPE, clip_vocab=CLIP_VOCAB))
     w2i = defaultdict(lambda: UNK, w2i)
@@ -391,10 +394,10 @@ elif USE_ATTN_FILE:
 else:
     if BLOCK_WORDS is None:
         # log.pr_blue("Vanilla case: no attention manipulation")
-        print("Vanilla case: no attention manipulation")
+        logger.info("Vanilla case: no attention manipulation")
     else:
         # log.pr_blue("Using block words")
-        print("Using block words")
+        logger.info("Using block words")
 
     train = list(read_dataset(prefix+"train.txt", block_words=BLOCK_WORDS, clip_vocab=CLIP_VOCAB))
     nwords = len(w2i) if not CLIP_VOCAB else VOCAB_SIZE
@@ -418,8 +421,7 @@ i2t = {v: k for k, v in t2i.items()}
 
 ntags = len(t2i)
 
-# log.pr_cyan("The vocabulary size is %d" %(nwords))
-print("The vocabulary size is %d" %(nwords))
+logger.info(f"The vocabulary size is {nwords}")
 
 if MODEL_TYPE == 'emb-att':
     model = EmbAttModel(nwords, EMB_SIZE, ntags)
@@ -441,12 +443,12 @@ if use_cuda:
     float_type = torch.cuda.FloatTensor
     model.cuda()
 
-print ("evaluating without any training ...")
+logger.info("evaluating without any training ...")
 _, _ = evaluate(test, 0, name='test', attn_stats=True,
                         num_vis=0)
 
 
-print ("starting to train")
+logger.info("starting to train")
 
 
 best_dev_accuracy  = 0.
@@ -489,21 +491,22 @@ for ITER in range(1, NUM_EPOCHS+1):
         train_hammer_loss += hammer_loss.item()
         train_kld_loss += kld_loss.item()
 
-        print ("ID: %4d\t CE: %0.4f\t ENTROPY: %0.4f\t HAMMER: %0.4f\t KLD: %.4f\t TOTAL: %0.4f" %(
-            num,
-            ce_loss.item(),
-            entropy_loss.item(),
-            hammer_loss.item(),
-            kld_loss.item(),
-            loss.item()
-        ), end='\r')
+        #TODO: add tensorboard summary writer
+        # logger.info("ID: %4d\t CE: %0.4f\t ENTROPY: %0.4f\t HAMMER: %0.4f\t KLD: %.4f\t TOTAL: %0.4f" %(
+        #     num,
+        #     ce_loss.item(),
+        #     entropy_loss.item(),
+        #     hammer_loss.item(),
+        #     kld_loss.item(),
+        #     loss.item()
+        # ), end='\r')
 
         # update the params
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
-    print("iter %r: train loss=%.4f, ce_loss=%.4f, entropy_loss=%.4f,"
+    logger.info("iter %r: train loss=%.4f, ce_loss=%.4f, entropy_loss=%.4f,"
                 "hammer_loss=%.4f, kld_loss==%.4f, time=%.2fs" % (
                 ITER,
                 train_loss/len(train),
@@ -529,12 +532,11 @@ for ITER in range(1, NUM_EPOCHS+1):
 
         if TO_DUMP_ATTN:
             # log.pr_bmagenta("dumping attention maps")
-            print("dumping attention maps")
+            logger.info("dumping attention maps")
             dump_attention_maps(train, prefix + "train.txt.attn." + MODEL_TYPE)
             dump_attention_maps(dev, prefix + "dev.txt.attn." + MODEL_TYPE)
             dump_attention_maps(test, prefix + "test.txt.attn." + MODEL_TYPE)
 
 
-    print ("iter %r: best test accuracy = %.4f attained after epoch = %d" %(
+    logger.info("iter %r: best test accuracy = %.4f attained after epoch = %d" %(
         ITER, best_test_accuracy, best_epoch))
-

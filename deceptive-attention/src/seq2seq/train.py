@@ -16,7 +16,7 @@ from batch_utils import *
 from gen_utils import *
 from log_utils import *
 from models import Attention, Seq2Seq, Encoder, Decoder, DecoderNoAttn, DecoderUniform
-from utils import Language
+from utils import *
 
 # --------------- non-determinism issues with RNN methods ----------------- #
 # https://pytorch.org/docs/stable/generated/torch.nn.LSTM.html#torch.nn.LSTM
@@ -468,8 +468,11 @@ def train(task=TASK,
         # candidate_tokens = [SRC_LANG.get_word(w) for w in candidate.cpu().numpy()]
         # reference_tokens = [TRG_LANG.get_word(w) for w in reference.cpu().numpy()]
         #
-        # score = bleu_score(reference_tokens, candidate_tokens)
+        # score = bleu_score_sentence(reference_tokens, candidate_tokens)
         # logger.info(f"First sentence BLEU score ..........\t{score:0.2f}")
+
+        score = bleu_score_corpus(test_batches_single, output_lines, SRC_LANG, TRG_LANG)
+        logger.info(f"First sentence BLEU score ..........\t{score:0.2f}")
 
         logger.info("[done] .... now dumping the translations")
 

@@ -138,3 +138,6 @@ dmypy.json
 logs/
 tensorboard/
 vocab/
+models/
+job_outputs/
+en-de*

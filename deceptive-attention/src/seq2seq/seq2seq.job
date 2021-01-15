@@ -7,7 +7,7 @@
 #SBATCH --cpus-per-task=3
 #SBATCH --time=32:00:00
 #SBATCH --mem=32000M
-#SBATCH --array=1-25%2
+#SBATCH --array=1-24%2
 #SBATCH --output=job_outputs/slurm_seq2seq_%A_%a.out
 
 module purge

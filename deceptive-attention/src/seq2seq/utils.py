@@ -1,7 +1,7 @@
 import pickle
 from collections import defaultdict
 
-# import nltk
+import nltk
 
 PAD_token = 0
 SOS_token = 1
@@ -70,5 +70,20 @@ class Language:
         return padded_seq[:max_len]
 
 
-# def bleu_score(reference_tokens, candidate_tokens):
-#     return nltk.translate.bleu_score.sentence_bleu(reference_tokens, candidate_tokens)
+def bleu_score_corpus(references, candidates, src_lang, trg_lang):
+    print('candidates shape: ', candidates.shape)
+    print('references shape: ', references.shape)
+
+    print('one candidate: ', candidates[0])
+    print('one references: ', references[0])
+
+    # indices --> convert to words
+    candidate_tokens = [src_lang.get_word(w) for w in candidates]
+    # candidate_tokens = [src_lang.get_word(word) for candidate in candidates for word in candidate]
+    reference_tokens = [trg_lang.get_word(word) for reference in references for word in reference]
+
+    return nltk.translate.bleu_score.corpus_bleu(reference_tokens, candidate_tokens)
+
+
+def bleu_score_sentence(reference_tokens, candidate_tokens):
+    return nltk.translate.bleu_score.sentence_bleu(reference_tokens, candidate_tokens)

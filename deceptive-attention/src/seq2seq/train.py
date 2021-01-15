@@ -18,12 +18,18 @@ from log_utils import *
 from models import Attention, Seq2Seq, Encoder, Decoder, DecoderNoAttn, DecoderUniform
 from utils import Language
 
-# import log
+# --------------- non-determinism issues with RNN methods ----------------- #
+# https://pytorch.org/docs/stable/generated/torch.nn.LSTM.html#torch.nn.LSTM
+# CUDA 10.1
+# CUDA_LAUNCH_BLOCKING = 1
+
+# CUDA 10.2
+# CUBLAS_WORKSPACE_CONFIG =:16:8
 
 # --------------- parse the flags etc ----------------- #
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-parser.add_argument('--task', dest='task', default='copy',
+parser.add_argument('--task', dest='task', default='en-de',
                     choices=('copy', 'reverse-copy', 'binary-flip', 'en-hi', 'en-de'),
                     help='select the task you want to run on')
 
@@ -32,24 +38,25 @@ parser.add_argument('--loss-coef', dest='loss_coeff', type=float, default=0.0)
 parser.add_argument('--epochs', dest='epochs', type=int, default=5)
 parser.add_argument('--seed', dest='seed', type=int, default=1234)
 
-# parser.add_argument('--uniform', dest='uniform', action='store_true')
-# parser.add_argument('--no-attn', dest='no_attn', action='store_true')
 parser.add_argument('--attention', dest='attention', type=str, default='dot-product')
 
 parser.add_argument('--batch-size', dest='batch_size', type=int, default=128)
 parser.add_argument('--num-train', dest='num_train', type=int, default=1000000)
-parser.add_argument('--decode-with-no-attn', dest='no_attn_inference', action='store_true', default=True)
+parser.add_argument('--decode-with-no-attn', dest='no_attn_inference', action='store_true')
 
-parser.add_argument('--tensorboard_log', dest='tensorboard_log', type=bool, default=False)
+parser.add_argument('--tensorboard_log', dest='tensorboard_log', action='store_true')
 
 params = vars(parser.parse_args())
 TASK = params['task']
 DEBUG = params['debug']
 COEFF = params['loss_coeff']
-NUM_EPOCHS = params['epochs']
+EPOCHS = params['epochs']
 TENSORBOARD_LOG = params['tensorboard_log']
 
 LOG_PATH = "logs/"
+DATA_PATH = "data/"
+DATA_VOCAB_PATH = "data/vocab/"
+DATA_MODELS_PATH = "data/models/"
 
 long_type = torch.LongTensor
 float_type = torch.FloatTensor
@@ -59,7 +66,7 @@ if use_cuda:
     long_type = torch.cuda.LongTensor
     float_type = torch.cuda.FloatTensor
 
-DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+DEVICE = torch.device('cuda' if use_cuda else 'cpu')
 
 ENC_EMB_DIM = 256
 DEC_EMB_DIM = 256
@@ -74,7 +81,7 @@ EOS_IDX = utils.EOS_token
 # UNIFORM = params['uniform']
 # NO_ATTN = params['no_attn']
 
-# can have values 'head-by-head', 'uniform', or 'no_attention'
+# can have values 'dot-product', 'uniform', or 'no_attention'
 ATTENTION = params['attention']
 
 NUM_TRAIN = params['num_train']
@@ -279,7 +286,7 @@ def generate(model, data):
 def set_seed(seed):
     random.seed(seed)
     torch.manual_seed(seed)
-    if torch.cuda.is_available():
+    if use_cuda:
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
         torch.backends.cudnn.deterministic = True
@@ -306,7 +313,7 @@ def initialize_model(attention, encoder_emb_dim, decoder_emb_dim, encoder_hid_di
 
     suffix = ""
 
-    attn = Attention(encoder_hid_dim, decoder_emb_dim)
+    attn = Attention(encoder_hid_dim, decoder_hid_dim)
     enc = Encoder(input_dim, encoder_emb_dim, encoder_hid_dim, decoder_hid_dim, ENC_DROPOUT)
 
     if attention == 'uniform':
@@ -334,7 +341,7 @@ def initialize_model(attention, encoder_emb_dim, decoder_emb_dim, encoder_hid_di
 
 
 def train(task=TASK,
-          num_epochs=NUM_EPOCHS,
+          epochs=EPOCHS,
           coeff=COEFF,
           seed=SEED,
           batch_size=BATCH_SIZE,
@@ -346,7 +353,6 @@ def train(task=TASK,
           encoder_hid_dim=ENC_HID_DIM,
           decoder_hid_dim=DEC_HID_DIM,
           tensorboard_log=TENSORBOARD_LOG):
-
     set_seed(SEED)
 
     writer = None
@@ -356,12 +362,13 @@ def train(task=TASK,
     logger = setup_logger(LOG_PATH, 'task=%s_coeff=%s_seed=%s' % (task, coeff, seed))
 
     logger.info("Starting training..........")
-    logger.info(f'Configuration:\n num_epochs: {num_epochs}\n coeff: {coeff}\n seed: {seed}\n batch_size: ' +
-                f'{batch_size}\n attention: {attention}\n debug: {debug}\n num_train: {num_train}\n device: {DEVICE}\n')
+    logger.info(f'Configuration:\n epochs: {epochs}\n coeff: {coeff}\n seed: {seed}\n batch_size: ' +
+                f'{batch_size}\n attention: {attention}\n debug: {debug}\n num_train: {num_train}\n device: {DEVICE}\n '
+                f'task: {task}\n')
 
     # load vocabulary if already present
-    src_vocab_path = "data/" + task + '_coeff=' + str(coeff) + ".src.vocab"
-    trg_vocab_path = "data/" + task + '_coeff=' + str(coeff) + ".trg.vocab"
+    src_vocab_path = DATA_PATH + task + '_coeff=' + str(coeff) + ".src.vocab"
+    trg_vocab_path = DATA_PATH + task + '_coeff=' + str(coeff) + ".trg.vocab"
 
     if os.path.exists(src_vocab_path):
         SRC_LANG.load_vocab(src_vocab_path)
@@ -383,7 +390,7 @@ def train(task=TASK,
 
     no_improvement_last_time = False
 
-    for epoch in range(num_epochs):
+    for epoch in range(epochs):
 
         start_time = time.time()
 
@@ -395,10 +402,9 @@ def train(task=TASK,
             writer.add_scalar("Accuracy/train", train_acc, epoch)
             writer.add_scalar("AttentionMass/train", train_attn_mass, epoch)
 
-
             # writer.add_hparams({"lr": "learning_rate", "bsize": batch_size, "task": task, "coeff": coeff, "seed": seed},
             #                    {})
-                               # {'accuracy': train_acc, 'loss': train_loss})
+            # {'accuracy': train_acc, 'loss': train_loss})
 
             writer.add_scalar("Loss/valid", val_loss, epoch)
             writer.add_scalar("Accuracy/valid", val_acc, epoch)
@@ -410,7 +416,8 @@ def train(task=TASK,
 
         if val_loss < best_valid_loss:
             best_valid_loss = val_loss
-            torch.save(model.state_dict(), 'data/models/model_' + task + suffix + '_seed=' + str(seed) + '_coeff='
+            torch.save(model.state_dict(),
+                       DATA_MODELS_PATH + 'model_' + task + suffix + '_seed=' + str(seed) + '_coeff='
                        + str(coeff) + '_num-train=' + str(num_train) + '.pt')
             epochs_taken_to_converge = epoch + 1
             convergence_time += (end_time - start_time)
@@ -428,7 +435,7 @@ def train(task=TASK,
             |  Val. Attn Mass: {val_attn_mass:0.2f} |  Val. PPL: {math.exp(val_loss):7.3f}')
 
     # load the best model and print stats:
-    model.load_state_dict(torch.load('data/models/model_' + task + suffix + '_seed=' + str(seed) + '_coeff='
+    model.load_state_dict(torch.load(DATA_MODELS_PATH + 'model_' + task + suffix + '_seed=' + str(seed) + '_coeff='
                                      + str(coeff) + '_num-train=' + str(num_train) + '.pt'))
 
     test_loss, test_acc, test_attn_mass = evaluate(model, test_batches, criterion)
@@ -440,9 +447,9 @@ def train(task=TASK,
     logger.info(f"Convergence time in seconds ..\t{convergence_time:0.2f}")
     logger.info(f"Sample efficiency in epochs ..\t{epochs_taken_to_converge}")
 
-    SRC_LANG.save_vocab("data/vocab/" + task + suffix + '_seed=' + str(seed)
+    SRC_LANG.save_vocab(DATA_VOCAB_PATH + task + suffix + '_seed=' + str(seed)
                         + '_coeff=' + str(coeff) + '_num-train=' + str(num_train) + ".src.vocab")
-    TRG_LANG.save_vocab("data/vocab/" + task + suffix + '_seed=' + str(seed)
+    TRG_LANG.save_vocab(DATA_VOCAB_PATH + task + suffix + '_seed=' + str(seed)
                         + '_coeff=' + str(coeff) + '_num-train=' + str(num_train) + ".trg.vocab")
 
     if task in ['en-hi', 'en-de']:
@@ -453,9 +460,20 @@ def train(task=TASK,
         test_batches_single = list(get_batches(test_sentences, 1, SRC_LANG, TRG_LANG))
         output_lines = generate(model, test_batches_single)
 
+        # TODO: work on this
+        # reference = test_batches_single[0]
+        # candidate = output_lines[0]
+
+        # indices --> convert to words
+        # candidate_tokens = [SRC_LANG.get_word(w) for w in candidate.cpu().numpy()]
+        # reference_tokens = [TRG_LANG.get_word(w) for w in reference.cpu().numpy()]
+        #
+        # score = bleu_score(reference_tokens, candidate_tokens)
+        # logger.info(f"First sentence BLEU score ..........\t{score:0.2f}")
+
         logger.info("[done] .... now dumping the translations")
 
-        outfile = "data/" + task + suffix + "_seed" + str(seed) + '_coeff=' + str(coeff) + '_num-train=' \
+        outfile = DATA_PATH + task + suffix + "_seed" + str(seed) + '_coeff=' + str(coeff) + '_num-train=' \
                   + str(num_train) + ".test.out"
         fw = open(outfile, 'w')
         for line in output_lines:
@@ -472,14 +490,14 @@ def main():
     if not os.path.exists(LOG_PATH):
         os.makedirs(LOG_PATH)
 
-    if not os.path.exists('data'):
-        os.makedirs('data')
+    if not os.path.exists(DATA_PATH):
+        os.makedirs(DATA_PATH)
 
-    if not os.path.exists('data/models/'):
-        os.makedirs('data/models/')
+    if not os.path.exists(DATA_MODELS_PATH):
+        os.makedirs(DATA_MODELS_PATH)
 
-    if not os.path.exists('data/vocab/'):
-        os.makedirs('data/vocab/')
+    if not os.path.exists(DATA_VOCAB_PATH):
+        os.makedirs(DATA_VOCAB_PATH)
 
     train()
 

@@ -2,14 +2,13 @@
 
 #SBATCH --partition=gpu_titanrtx_shared_course
 #SBATCH --gres=gpu:1
-#SBATCH --job-name=classification_job
+#SBATCH --job-name=seq2seq_job
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=3
-#SBATCH --time=24:00:00
+#SBATCH --time=32:00:00
 #SBATCH --mem=32000M
-#SBATCH --array=1-30%2
-#SBATCH --output=slurm_classification_%A_%a.out
-
+#SBATCH --array=1-25%2
+#SBATCH --output=job_outputs/slurm_seq2seq_%A_%a.out
 
 module purge
 module load 2019
@@ -18,6 +17,6 @@ module load Anaconda3
 
 source activate attention
 
-PARAMETERS_FILE=parameters.txt
+PARAMETERS_FILE=job_parameters/parameters.txt
 
-srun python -u main.py $(head -$SLURM_ARRAY_TASK_ID $PARAMETERS_FILE | tail -1)
+srun python -u train.py $(head -$SLURM_ARRAY_TASK_ID $PARAMETERS_FILE | tail -1)

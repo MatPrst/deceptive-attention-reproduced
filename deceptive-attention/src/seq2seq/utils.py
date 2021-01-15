@@ -71,18 +71,23 @@ class Language:
 
 
 def bleu_score_corpus(references, candidates, src_lang, trg_lang):
-    print('candidates shape: ', candidates.shape)
-    print('references shape: ', references.shape)
+    print('candidates ', len(candidates))
+    print('targets ', len(references))
+    assert len(candidates) == len(references)
 
-    print('one candidate: ', candidates[0])
-    print('one references: ', references[0])
+    # need tokens for BLEU score --> converting indices to word tokens
 
-    # indices --> convert to words
-    candidate_tokens = [src_lang.get_word(w) for w in candidates]
-    # candidate_tokens = [src_lang.get_word(word) for candidate in candidates for word in candidate]
-    reference_tokens = [trg_lang.get_word(word) for reference in references for word in reference]
+    candidate_sentences = [src_lang.get_word(w) for w in candidates]
 
-    return nltk.translate.bleu_score.corpus_bleu(reference_tokens, candidate_tokens)
+    target_sentences = []
+    for ref in references:
+        trg_sentence = ref[2][0]
+        trg_tokens = [trg_lang.get_word(w) for w in trg_sentence]
+        target_sentences.append(trg_tokens)
+
+    # reference_sentences = [trg_lang.get_word(word) for reference in references for word in reference[2][0]]
+
+    return nltk.translate.bleu_score.corpus_bleu(target_sentences, candidate_sentences)
 
 
 def bleu_score_sentence(reference_tokens, candidate_tokens):

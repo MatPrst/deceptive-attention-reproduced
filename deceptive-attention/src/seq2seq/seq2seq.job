@@ -5,7 +5,7 @@
 #SBATCH --job-name=seq2seq_job
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=3
-#SBATCH --time=32:00:00
+#SBATCH --time=24:00:00
 #SBATCH --mem=32000M
 #SBATCH --array=1-40%2
 #SBATCH --output=job_outputs/slurm_seq2seq_%A_%a.out

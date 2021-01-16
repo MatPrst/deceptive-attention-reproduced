@@ -7,6 +7,13 @@ from torch import nn
 
 PAD_token = 0
 
+long_type = torch.LongTensor
+float_type = torch.FloatTensor
+
+if torch.cuda.is_available():
+    long_type = torch.cuda.LongTensor
+    float_type = torch.cuda.FloatTensor
+
 
 def set_seed(seed):
     random.seed(seed)

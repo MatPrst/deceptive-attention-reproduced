@@ -76,7 +76,7 @@ def bleu_score_corpus(references, candidates, src_lang, trg_lang):
     assert len(candidates) == len(references)
 
     # need tokens for BLEU score --> converting indices to word tokens
-
+    print('candidate indices ', candidates)
     candidate_sentences = [src_lang.get_word(w) for w in candidates]
 
     target_sentences = []

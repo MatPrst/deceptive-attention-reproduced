@@ -86,13 +86,21 @@ def bleu_score_corpus(references, candidates, src_lang, trg_lang):
         target_sentences.append(trg_tokens)
 
     # reference_sentences = [trg_lang.get_word(word) for reference in references for word in reference[2][0]]
+    for i in range(len(candidate_sentences[:5])):
+        print('candidate ', candidate_sentences[i])
+        print('reference ', target_sentences[i])
+
+    total = bleu_score_sentence(target_sentences, candidate_sentences)
+    print('sentencewise bleu score overall, ', total)
 
     return nltk.translate.bleu_score.corpus_bleu(target_sentences, candidate_sentences)
 
 
-def bleu_score_sentence(reference_tokens, candidate_tokens):
-    for i in range(len(reference_tokens[:5])):
-        print('candidate ', candidate_tokens[i])
-        print('reference ', reference_tokens[i])
+def bleu_score_sentence(reference_sentences, candidate_sentences):
+    total_bleu_score = 0
 
-    return nltk.translate.bleu_score.sentence_bleu(reference_tokens, candidate_tokens)
+    for i in range(len(reference_sentences)):
+        sentence_bleu = nltk.translate.bleu_score.sentence_bleu(reference_sentences, candidate_sentences)
+        total_bleu_score += sentence_bleu
+
+    return total_bleu_score / len(reference_sentences)

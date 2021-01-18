@@ -91,4 +91,8 @@ def bleu_score_corpus(references, candidates, src_lang, trg_lang):
 
 
 def bleu_score_sentence(reference_tokens, candidate_tokens):
+    for i in range(len(reference_tokens[:5])):
+        print('candidate ', candidate_tokens[i])
+        print('reference ', reference_tokens[i])
+
     return nltk.translate.bleu_score.sentence_bleu(reference_tokens, candidate_tokens)

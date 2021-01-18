@@ -81,7 +81,7 @@ EOS_IDX = utils.EOS_token
 # UNIFORM = params['uniform']
 # NO_ATTN = params['no_attn']
 
-# can have values 'dot-product', 'uniform', or 'no_attention'
+# can have values 'dot-product', 'uniform', or 'no-attention'
 ATTENTION = params['attention']
 
 NUM_TRAIN = params['num_train']
@@ -319,9 +319,9 @@ def initialize_model(attention, encoder_emb_dim, decoder_emb_dim, encoder_hid_di
     if attention == 'uniform':
         dec = DecoderUniform(output_dim, decoder_emb_dim, encoder_hid_dim, decoder_hid_dim, DEC_DROPOUT, attn)
         suffix = "_uniform"
-    elif attention == 'no_attention' or DECODE_WITH_NO_ATTN:
+    elif attention == 'no-attention' or DECODE_WITH_NO_ATTN:
         dec = DecoderNoAttn(output_dim, decoder_emb_dim, encoder_hid_dim, decoder_hid_dim, DEC_DROPOUT, attn)
-        if attention == 'no_attention':
+        if attention == 'no-attention':
             suffix = "_no-attn"
     else:
         dec = Decoder(output_dim, decoder_emb_dim, encoder_hid_dim, decoder_hid_dim, DEC_DROPOUT, attn)

@@ -62,10 +62,10 @@ class TranslationCallback(pl.Callback):
                           and saving of the files.
         """
 
-        interpolated_images = pl_module.interpolate(self.batch_size, self.interpolation_steps)
-
-        grid = torchvision.utils.make_grid(interpolated_images, nrow=7, normalize=True, range=(-1, 1))
-        save_image(grid, os.path.join(trainer.logger.log_dir, 'gan_interpolate.png'))
+        # interpolated_images = pl_module.interpolate(self.batch_size, self.interpolation_steps)
+        #
+        # grid = torchvision.utils.make_grid(interpolated_images, nrow=7, normalize=True, range=(-1, 1))
+        # save_image(grid, os.path.join(trainer.logger.log_dir, 'gan_interpolate.png'))
 
 
 def train_gru(parameters):

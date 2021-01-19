@@ -17,6 +17,6 @@ module load Anaconda3
 
 source activate attention
 
-PARAMETERS_FILE=job_parameters/copy.txt
+PARAMETERS_FILE=job_parameters/en_de_single.txt
 
 srun python -u train.py $(head -$SLURM_ARRAY_TASK_ID $PARAMETERS_FILE | tail -1)

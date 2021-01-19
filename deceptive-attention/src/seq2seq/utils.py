@@ -89,9 +89,10 @@ def bleu_score_corpus(references, candidates, src_lang, trg_lang):
         target_sentences.append([trg_tokens])
 
         if i < 10:
-            print(target_stc)
-            print(trg_sentence)
-            print(trg_tokens)
+            print('reference full ', ref)
+            print('target indices ', target_stc)
+            print('target idx cut ', trg_sentence)
+            print('target sentence cut ', trg_tokens)
             print('\n')
 
         i+=1

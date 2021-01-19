@@ -379,9 +379,9 @@ def train(task=TASK,
     if os.path.exists(trg_vocab_path):
         TRG_LANG.load_vocab(trg_vocab_path)
 
-    sentences = initialize_sentences(task, debug, num_train, SPLITS)
+    # sentences = initialize_sentences(task, debug, num_train, SPLITS)
 
-    train_batches, dev_batches, test_batches = get_batches_from_sentences(sentences, batch_size, SRC_LANG, TRG_LANG)
+    # train_batches, dev_batches, test_batches = get_batches_from_sentences(sentences, batch_size, SRC_LANG, TRG_LANG)
 
     # setup the model
     optimizer, criterion, model, suffix = initialize_model(attention, encoder_emb_dim, decoder_emb_dim, encoder_hid_dim,

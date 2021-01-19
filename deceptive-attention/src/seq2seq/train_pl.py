@@ -1,13 +1,30 @@
 import argparse
 import os
+
 import pytorch_lightning as pl
 import torch
+from pytorch_lightning import Trainer
+from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import ModelCheckpoint
+
+import utils
+from batch_utils import SentenceDataModule
+from model import BiGRU
 
 LOG_PATH = "logs/"
 DATA_PATH = "data/"
 DATA_VOCAB_PATH = "data/vocab/"
 DATA_MODELS_PATH = "data/models/"
+
+ENC_EMB_DIM = 256
+DEC_EMB_DIM = 256
+ENC_HID_DIM = 512
+DEC_HID_DIM = 512
+ENC_DROPOUT = 0.5
+DEC_DROPOUT = 0.5
+PAD_IDX = utils.PAD_token
+SOS_IDX = utils.SOS_token
+EOS_IDX = utils.EOS_token
 
 
 def train_gru(parameters):
@@ -22,8 +39,10 @@ def train_gru(parameters):
     os.makedirs(DATA_MODELS_PATH, exist_ok=True)
     os.makedirs(DATA_VOCAB_PATH, exist_ok=True)
 
-    train_loader = mnist(batch_size=parameters.batch_size,
-                         num_workers=args.num_workers)
+    data_module = SentenceDataModule(task=parameters.task,
+                                     batch_size=parameters.batch_size,
+                                     num_train=parameters.num_train,
+                                     debug=parameters.debug)
 
     # Create a PyTorch Lightning trainer with the generation callback
 
@@ -32,12 +51,14 @@ def train_gru(parameters):
     # callbacks = [translation_callback]
     callbacks = []
 
-    trainer = pl.Trainer(default_root_dir=LOG_PATH,
-                         checkpoint_callback=ModelCheckpoint(save_weights_only=True),
-                         gpus=1 if torch.cuda.is_available() else 0,
-                         max_epochs=parameters.epochs,
-                         callbacks=callbacks,
-                         progress_bar_refresh_rate=1)
+    tb_logger = pl_loggers.TensorBoardLogger('logs/')
+    trainer = Trainer(default_root_dir=LOG_PATH,
+                      logger=tb_logger,
+                      checkpoint_callback=ModelCheckpoint(save_weights_only=True),
+                      gpus=1 if torch.cuda.is_available() else 0,
+                      max_epochs=parameters.epochs,
+                      callbacks=callbacks,
+                      progress_bar_refresh_rate=1)
 
     # Optional logging argument that we don't need
     trainer.logger._default_hp_metric = None
@@ -45,15 +66,24 @@ def train_gru(parameters):
     # Create model
     pl.seed_everything(parameters.seed)
 
-    model = BiGRU(hidden_dims_gen=parameters.hidden_dims_gen,
-                hidden_dims_disc=parameters.hidden_dims_disc,
-                dp_rate_gen=parameters.dp_rate_gen,
-                dp_rate_disc=parameters.dp_rate_disc,
-                lr=parameters.lr)
+    model = BiGRU(input_dim=1000,
+                  output_dim=1000,
+                  encoder_hid_dim=ENC_HID_DIM,
+                  decoder_hid_dim=DEC_HID_DIM,
+                  encoder_emb_dim=ENC_EMB_DIM,
+                  decoder_emb_dim=DEC_EMB_DIM,
+                  encoder_dropout=ENC_DROPOUT,
+                  decoder_dropout=DEC_DROPOUT,
+                  attention_type=parameters.attention,
+                  pad_idx=PAD_IDX,
+                  sos_idx=SOS_IDX,
+                  eos_idx=EOS_IDX,
+                  coeff=parameters.loss_coeff,
+                  decode_with_no_attention=parameters.no_attn_inference)
 
     # Training
     # gen_callback.sample_and_save(trainer, model, epoch=0)  # Initial sample
-    trainer.fit(model, train_loader)
+    trainer.fit(model, data_module)
 
     # inter_callback.sample_and_save(trainer, model, epoch=0)
 
@@ -68,18 +98,6 @@ if __name__ == '__main__':
     parser.add_argument('--loss-coef', dest='loss_coeff', type=float, default=0.0)
 
     parser.add_argument('--attention', dest='attention', type=str, default='dot-product')
-
-    parser.add_argument('--hidden_dims_disc', default=[512, 256],
-                        type=int, nargs='+',
-                        help='Hidden dimensionalities to use inside the ' +
-                             'discriminator. To specify multiple, use " " to ' +
-                             'separate them. Example: \"512 256\"')
-
-    parser.add_argument('--dp_rate_gen', default=0.1, type=float,
-                        help='Dropout rate in the discriminator')
-
-    parser.add_argument('--dp_rate_disc', default=0.3, type=float,
-                        help='Dropout rate in the discriminator')
 
     # Optimizer hyperparameters
     parser.add_argument('--batch-size', dest='batch_size', type=int, default=128)
@@ -101,6 +119,6 @@ if __name__ == '__main__':
 
     parser.add_argument('--tensorboard_log', dest='tensorboard_log', action='store_true')
 
-    params = vars(parser.parse_args())
+    params = parser.parse_args()
 
     train_gru(params)

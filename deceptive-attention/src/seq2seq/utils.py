@@ -96,8 +96,8 @@ def bleu_score_corpus(references, candidates, src_lang, trg_lang):
         print('candidate ', candidate_sentences[i])
         print('reference ', target_sentences[i])
 
-    total = bleu_score_sentence(target_sentences, candidate_sentences)
-    print('sentence wise bleu score overall, ', total)
+    # total = bleu_score_sentence(target_sentences, candidate_sentences)
+    # print('sentence wise bleu score overall, ', total)
 
     return nltk.translate.bleu_score.corpus_bleu(target_sentences, candidate_sentences)
 

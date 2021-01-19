@@ -1,5 +1,15 @@
---epochs 30 --task en-de --seed 1 --loss-coef 0.1 --debug
---epochs 30 --task en-de --seed 1 --loss-coef 1.0 --debug
---epochs 30 --task en-de --seed 5 --loss-coef 0.0 --debug
---epochs 30 --task en-de --seed 5 --loss-coef 0.1 --debug
---epochs 30 --task en-de --seed 5 --loss-coef 1.0 --debug
+--epochs 30 --task en-de --seed 1 --loss-coef 0.0 
+--epochs 30 --task en-de --seed 2 --loss-coef 0.0 
+--epochs 30 --task en-de --seed 3 --loss-coef 0.0 
+--epochs 30 --task en-de --seed 4 --loss-coef 0.0 
+--epochs 30 --task en-de --seed 5 --loss-coef 0.0 
+--epochs 30 --task en-de --seed 1 --loss-coef 0.1 
+--epochs 30 --task en-de --seed 2 --loss-coef 0.1 
+--epochs 30 --task en-de --seed 3 --loss-coef 0.1 
+--epochs 30 --task en-de --seed 4 --loss-coef 0.1 
+--epochs 30 --task en-de --seed 5 --loss-coef 0.1 
+--epochs 30 --task en-de --seed 1 --loss-coef 1.0 
+--epochs 30 --task en-de --seed 2 --loss-coef 1.0 
+--epochs 30 --task en-de --seed 3 --loss-coef 1.0 
+--epochs 30 --task en-de --seed 4 --loss-coef 1.0 
+--epochs 30 --task en-de --seed 5 --loss-coef 1.0 

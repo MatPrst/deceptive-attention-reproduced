@@ -16,7 +16,7 @@ from batch_utils import *
 from gen_utils import *
 from log_utils import *
 from models import Attention, Seq2Seq, Encoder, Decoder, DecoderNoAttn, DecoderUniform
-from utils import Language
+from utils import *
 
 # --------------- non-determinism issues with RNN methods ----------------- #
 # https://pytorch.org/docs/stable/generated/torch.nn.LSTM.html#torch.nn.LSTM
@@ -81,7 +81,7 @@ EOS_IDX = utils.EOS_token
 # UNIFORM = params['uniform']
 # NO_ATTN = params['no_attn']
 
-# can have values 'dot-product', 'uniform', or 'no_attention'
+# can have values 'dot-product', 'uniform', or 'no-attention'
 ATTENTION = params['attention']
 
 NUM_TRAIN = params['num_train']
@@ -319,9 +319,9 @@ def initialize_model(attention, encoder_emb_dim, decoder_emb_dim, encoder_hid_di
     if attention == 'uniform':
         dec = DecoderUniform(output_dim, decoder_emb_dim, encoder_hid_dim, decoder_hid_dim, DEC_DROPOUT, attn)
         suffix = "_uniform"
-    elif attention == 'no_attention' or DECODE_WITH_NO_ATTN:
+    elif attention == 'no-attention' or DECODE_WITH_NO_ATTN:
         dec = DecoderNoAttn(output_dim, decoder_emb_dim, encoder_hid_dim, decoder_hid_dim, DEC_DROPOUT, attn)
-        if attention == 'no_attention':
+        if attention == 'no-attention':
             suffix = "_no-attn"
     else:
         dec = Decoder(output_dim, decoder_emb_dim, encoder_hid_dim, decoder_hid_dim, DEC_DROPOUT, attn)
@@ -447,41 +447,36 @@ def train(task=TASK,
     logger.info(f"Convergence time in seconds ..\t{convergence_time:0.2f}")
     logger.info(f"Sample efficiency in epochs ..\t{epochs_taken_to_converge}")
 
-    SRC_LANG.save_vocab(DATA_VOCAB_PATH + task + suffix + '_seed=' + str(seed)
-                        + '_coeff=' + str(coeff) + '_num-train=' + str(num_train) + ".src.vocab")
-    TRG_LANG.save_vocab(DATA_VOCAB_PATH + task + suffix + '_seed=' + str(seed)
-                        + '_coeff=' + str(coeff) + '_num-train=' + str(num_train) + ".trg.vocab")
+    out_path = f"{DATA_VOCAB_PATH}{task}{suffix}_seed={str(seed)}_coeff={str(coeff)}_num-train={str(num_train)}"
+    SRC_LANG.save_vocab(f"{out_path}.src.vocab")
+    TRG_LANG.save_vocab(f"{out_path}.trg.vocab")
 
     if task in ['en-hi', 'en-de']:
         # generate the output to compute bleu scores as well...
-        logger.info("generating the output translations from the model")
+        logger.info("Generating the output translations from the model.")
 
-        test_sentences = sentences[2]
-        test_batches_single = list(get_batches(test_sentences, 1, SRC_LANG, TRG_LANG))
-        output_lines = generate(model, test_batches_single)
+        translations, bleu_score = generate_translations(model, sentences)
 
-        # TODO: work on this
-        # reference = test_batches_single[0]
-        # candidate = output_lines[0]
+        logger.info(f"BLEU score ..........\t{bleu_score:0.2f}")
+        logger.info("[done] .... now dumping the translations.")
 
-        # indices --> convert to words
-        # candidate_tokens = [SRC_LANG.get_word(w) for w in candidate.cpu().numpy()]
-        # reference_tokens = [TRG_LANG.get_word(w) for w in reference.cpu().numpy()]
-        #
-        # score = bleu_score(reference_tokens, candidate_tokens)
-        # logger.info(f"First sentence BLEU score ..........\t{score:0.2f}")
-
-        logger.info("[done] .... now dumping the translations")
-
-        outfile = DATA_PATH + task + suffix + "_seed" + str(seed) + '_coeff=' + str(coeff) + '_num-train=' \
-                  + str(num_train) + ".test.out"
-        fw = open(outfile, 'w')
-        for line in output_lines:
+        fw = open(f"{out_path}.test.out", 'w')
+        for line in translations:
             fw.write(line.strip() + "\n")
         fw.close()
 
     if writer is not None:
         writer.close()
+
+
+def generate_translations(model, sentences):
+    test_sentences = sentences[2]
+    test_batches_single = list(get_batches(test_sentences, 1, SRC_LANG, TRG_LANG))
+
+    output_lines = generate(model, test_batches_single)
+    score = bleu_score_corpus(test_batches_single, output_lines, TRG_LANG)
+
+    return output_lines, score * 100        # report it in percentage
 
 
 def main():

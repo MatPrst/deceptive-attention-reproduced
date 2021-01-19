@@ -27,6 +27,47 @@ SOS_IDX = utils.SOS_token
 EOS_IDX = utils.EOS_token
 
 
+class TranslationCallback(pl.Callback):
+
+    def __init__(self, batch_size=4, interpolation_steps=5, every_n_epochs=10, save_to_disk=False):
+        """
+        Callback for translating sentences to TensorBoard and/or save them to disk every N epochs across training.
+        Inputs:
+            batch_size          - Number of sentences to be translated.
+            every_n_epochs      - Only translate those sentences every N epochs (otherwise tensorboard gets quite large)
+            save_to_disk        - If True, the samples should be saved to disk as well.
+        """
+        super().__init__()
+        self.batch_size = batch_size
+        self.every_n_epochs = every_n_epochs
+        self.save_to_disk = save_to_disk
+
+    def on_epoch_end(self, trainer, pl_module):
+        """
+        This function is called after every epoch.
+        Call the save_and_sample function every N epochs.
+        """
+        if (trainer.current_epoch + 1) % self.every_n_epochs == 0:
+            self.translate(trainer, pl_module, trainer.current_epoch + 1)
+
+    def translate(self, trainer, pl_module, epoch):
+        """
+        Function that generates translations and saves them from the BiGRU.
+        The generated samples should be added to TensorBoard and,
+        if self.save_to_disk is True, saved inside the logging directory.
+        Inputs:
+            trainer     - The PyTorch Lightning "Trainer" object.
+            pl_module   - The BiGRU model that is currently being trained.
+            epoch       - The epoch number to use for TensorBoard logging
+                          and saving of the files.
+        """
+
+        interpolated_images = pl_module.interpolate(self.batch_size, self.interpolation_steps)
+
+        grid = torchvision.utils.make_grid(interpolated_images, nrow=7, normalize=True, range=(-1, 1))
+        save_image(grid, os.path.join(trainer.logger.log_dir, 'gan_interpolate.png'))
+
+
 def train_gru(parameters):
     """
     Function for training and testing a bidirectional GRU model.
@@ -46,7 +87,7 @@ def train_gru(parameters):
 
     # Create a PyTorch Lightning trainer with the generation callback
 
-    # translation_callback = TranslationCallback(save_to_disk=True)
+    translation_callback = TranslationCallback(save_to_disk=True)
     # inter_callback = InterpolationCallback(save_to_disk=True)
     # callbacks = [translation_callback]
     callbacks = []
@@ -85,7 +126,7 @@ def train_gru(parameters):
     # gen_callback.sample_and_save(trainer, model, epoch=0)  # Initial sample
     trainer.fit(model, data_module)
 
-    # inter_callback.sample_and_save(trainer, model, epoch=0)
+    translation_callback.generate(trainer, model, epoch=0)
 
     return model
 

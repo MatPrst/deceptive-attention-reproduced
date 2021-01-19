@@ -85,13 +85,14 @@ def bleu_score_corpus(references, candidates, src_lang, trg_lang):
         target_stc = ref[2][0]
         trg_sentence = target_stc[1:-1]
 
+        trg_tokens = [trg_lang.get_word(w) for w in trg_sentence]
+        target_sentences.append([trg_tokens])
+
         if i < 10:
             print(target_stc)
             print(trg_sentence)
+            print(trg_tokens)
             print('\n')
-
-        trg_tokens = [trg_lang.get_word(w) for w in trg_sentence]
-        target_sentences.append([trg_tokens])
 
         i+=1
 

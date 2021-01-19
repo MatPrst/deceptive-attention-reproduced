@@ -474,7 +474,7 @@ def generate_translations(model, sentences):
     test_batches_single = list(get_batches(test_sentences, 1, SRC_LANG, TRG_LANG))
 
     output_lines = generate(model, test_batches_single)
-    score = bleu_score_corpus(test_batches_single, output_lines, SRC_LANG, TRG_LANG)
+    score = bleu_score_corpus(test_batches_single, output_lines, TRG_LANG)
 
     return output_lines, score * 100        # report it in percentage
 

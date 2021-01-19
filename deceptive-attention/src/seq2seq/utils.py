@@ -70,55 +70,33 @@ class Language:
         return padded_seq[:max_len]
 
 
-def bleu_score_corpus(references, candidates, src_lang, trg_lang):
+def bleu_score_corpus(references, candidates, trg_lang):
+    """
+    Computes the (test) corpus wide BLEU score using the library NLTK. Takes a list of reference sentences
+    (target sentences in target language) as well as candidates, transforms then into the expected format for NLTK
+    and computes the score.
+    """
+
     assert len(candidates) == len(references)
 
     # candidates are already words
     # targets are indices --> converting indices to word tokens
 
-    i = 0
     target_sentences = []
     for ref in references:
-        # cutting off <eof> and <sos> from target sentences
-        target_stc = ref[2][0]
-        trg_sentence = target_stc[1:-1]
-
-        trg_tokens = [trg_lang.get_word(w) for w in trg_sentence]
+        # getting the target indices and cutting off <eof> and <sos> from target sentences
+        trg_tokens = [trg_lang.get_word(w) for w in ref[2][0][1:-1]]
         target_sentences.append([trg_tokens])
 
-        if i < 10:
-            print('target indices ', target_stc)
-            print('target idx cut ', trg_sentence)
-            print('target sentence cut ', trg_tokens)
-            print('\n')
-        i += 1
-
     candidate_sentences = [candidate.split() for candidate in candidates]
-    # for candidate in candidates:
-    #     candidate_sentences.append()
-
-    # reference_sentences = [trg_lang.get_word(word) for reference in references for word in reference[2][0]]
-    # print('candidate sentences ', candidate_sentences)
 
     for i in range(len(candidate_sentences[:10])):
         print('candidate ', candidate_sentences[i])
         print('reference ', target_sentences[i])
         print('\n')
 
-    # total = bleu_score_sentence(target_sentences, candidate_sentences)
-    # print('sentence wise bleu score overall, ', total)
-
+    # Expected structure by NLTK
     # target Sentences: [[...], [...]]
     # candidate Sentences: [..., ...]
 
     return nltk.translate.bleu_score.corpus_bleu(target_sentences, candidate_sentences)
-
-
-def bleu_score_sentence(reference_sentences, candidate_sentences):
-    total_bleu_score = 0
-
-    for i in range(len(reference_sentences)):
-        sentence_bleu = nltk.translate.bleu_score.sentence_bleu(reference_sentences, candidate_sentences)
-        total_bleu_score += sentence_bleu
-
-    return total_bleu_score / len(reference_sentences)

@@ -29,7 +29,7 @@ EOS_IDX = utils.EOS_token
 
 class TranslationCallback(pl.Callback):
 
-    def __init__(self, batch_size=4, interpolation_steps=5, every_n_epochs=10, save_to_disk=False):
+    def __init__(self, batch_size=4, every_n_epochs=10, save_to_disk=False):
         """
         Callback for translating sentences to TensorBoard and/or save them to disk every N epochs across training.
         Inputs:
@@ -50,7 +50,7 @@ class TranslationCallback(pl.Callback):
         if (trainer.current_epoch + 1) % self.every_n_epochs == 0:
             self.translate(trainer, pl_module, trainer.current_epoch + 1)
 
-    def translate(self, trainer, pl_module, epoch):
+    def generate(self, trainer, pl_module, epoch):
         """
         Function that generates translations and saves them from the BiGRU.
         The generated samples should be added to TensorBoard and,
@@ -89,8 +89,9 @@ def train_gru(parameters):
 
     translation_callback = TranslationCallback(save_to_disk=True)
     # inter_callback = InterpolationCallback(save_to_disk=True)
-    # callbacks = [translation_callback]
-    callbacks = []
+    callbacks = [translation_callback]
+
+    # callbacks = []
 
     tb_logger = pl_loggers.TensorBoardLogger('logs/')
     trainer = Trainer(default_root_dir=LOG_PATH,

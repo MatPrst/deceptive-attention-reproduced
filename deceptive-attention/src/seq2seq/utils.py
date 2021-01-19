@@ -78,13 +78,22 @@ def bleu_score_corpus(references, candidates, src_lang, trg_lang):
     # need tokens for BLEU score --> converting indices to word tokens
     # candidate_sentences = [src_lang.get_word(w) for w in candidates]
 
+    i = 0
     target_sentences = []
     for ref in references:
         # cutting off <eof> and <sos> from target sentences
-        trg_sentence = ref[2][0][1:-1]
+        target_stc = ref[2][0]
+        trg_sentence = target_stc[1:-1]
+
+        if i < 10:
+            print(target_stc)
+            print(trg_sentence)
+            print('\n')
 
         trg_tokens = [trg_lang.get_word(w) for w in trg_sentence[1:-1]]
         target_sentences.append([trg_tokens])
+
+        i+=1
 
     candidate_sentences = []
     for candidate in candidates:

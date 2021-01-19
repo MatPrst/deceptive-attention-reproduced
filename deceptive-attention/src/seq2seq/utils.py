@@ -71,12 +71,10 @@ class Language:
 
 
 def bleu_score_corpus(references, candidates, src_lang, trg_lang):
-    print('candidates ', len(candidates))
-    print('targets ', len(references))
     assert len(candidates) == len(references)
 
-    # need tokens for BLEU score --> converting indices to word tokens
-    # candidate_sentences = [src_lang.get_word(w) for w in candidates]
+    # candidates are already words
+    # targets are indices --> converting indices to word tokens
 
     i = 0
     target_sentences = []
@@ -89,17 +87,15 @@ def bleu_score_corpus(references, candidates, src_lang, trg_lang):
         target_sentences.append([trg_tokens])
 
         if i < 10:
-            print('reference full ', ref)
             print('target indices ', target_stc)
             print('target idx cut ', trg_sentence)
             print('target sentence cut ', trg_tokens)
             print('\n')
+        i += 1
 
-        i+=1
-
-    candidate_sentences = []
-    for candidate in candidates:
-        candidate_sentences.append(candidate.split())
+    candidate_sentences = [candidate.split() for candidate in candidates]
+    # for candidate in candidates:
+    #     candidate_sentences.append()
 
     # reference_sentences = [trg_lang.get_word(word) for reference in references for word in reference[2][0]]
     # print('candidate sentences ', candidate_sentences)

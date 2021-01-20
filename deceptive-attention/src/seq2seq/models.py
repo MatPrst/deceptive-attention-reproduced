@@ -4,6 +4,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
+from batch_utils import SRC_LANG, TRG_LANG
 
 PAD_token = 0
 

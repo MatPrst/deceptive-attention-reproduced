@@ -1,5 +1,6 @@
 import numpy as np
 import pytorch_lightning as pl
+import torch
 from torch.utils.data import Dataset, DataLoader
 
 from utils import Language
@@ -38,28 +39,18 @@ class SentenceDataset(Dataset):
             trg_sentences = trg_sentences[:num_train]
             alignment_sentences = alignment_sentences[:num_train]
 
-        # self.sentences = [src_sentences, trg_sentences, alignment_sentences]
-
         # parallel should be at least equal len
         assert (len(src_sentences) == len(trg_sentences))
 
-        self.src_sentences = src_sentences
-        self.trg_sentences = trg_sentences
-        self.alignment_sentences = alignment_sentences
+        self.src_samples = []
+        self.trg_samples = []
+        self.aligned_outputs = []
 
-    def __len__(self):
-        return len(self.src_sentences)
-
-    def __getitem__(self, idx):
-
-        src_sample, src_len, trg_sample, trg_len, aligned_outputs = None, None, None, None, None
-
-        for b_idx in range(0, len(self.src_sentences), self.batch_size):
-
+        for idx in range(0, len(src_sentences)):
             # get the slice
-            src_sample = self.src_sentences[b_idx: b_idx + self.batch_size]
-            trg_sample = self.trg_sentences[b_idx: b_idx + self.batch_size]
-            align_sample = self.alignment_sentences[b_idx: b_idx + self.batch_size]
+            src_sample = src_sentences[idx: idx + self.batch_size]
+            trg_sample = src_sentences[idx: idx + self.batch_size]
+            align_sample = alignment_sentences[idx: idx + self.batch_size]
 
             # represent them
             src_sample = [SRC_LANG.get_sent_rep(s) for s in src_sample]
@@ -105,14 +96,25 @@ class SentenceDataset(Dataset):
 
             assert (src_sample.shape[1] == max_src_len)
 
-        assert src_sample is not None
-        assert src_len is not None
-        assert trg_sample is not None
-        assert trg_len is not None
-        assert aligned_outputs is not None
+            self.src_samples.append(src_sample)
+            self.trg_samples.append(trg_sample)
+            self.aligned_outputs.append(aligned_outputs)
 
-        sample = {'src_sample': src_sample, 'src_len': src_len,
-                  'trg_sample': trg_sample, 'trg_len': trg_len, 'aligned_outputs': aligned_outputs}
+        print('ready')
+
+    def __len__(self):
+        return len(self.src_samples)
+
+    def __getitem__(self, idx):
+
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+
+        src_sample = self.src_samples[idx]
+        trg_sample = self.trg_samples[idx]
+        aligned_outputs = self.aligned_outputs[idx]
+
+        sample = [src_sample, len(src_sample), trg_sample, len(trg_sample), aligned_outputs]
 
         return sample
 

@@ -8,8 +8,9 @@ from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 import utils
-from batch_utils import SentenceDataModule
+from batch_utils import SentenceDataModule, SRC_LANG, TRG_LANG
 from model import BiGRU
+from utils import *
 
 LOG_PATH = "logs/"
 DATA_PATH = "data/"
@@ -66,6 +67,25 @@ class TranslationCallback(pl.Callback):
         #
         # grid = torchvision.utils.make_grid(interpolated_images, nrow=7, normalize=True, range=(-1, 1))
         # save_image(grid, os.path.join(trainer.logger.log_dir, 'gan_interpolate.png'))
+        #
+        # logger.info("Generating the output translations from the model.")
+
+        # run
+        pl_module.translate(1)
+
+        test_sentences = sentences[2]
+        test_batches_single = list(get_batches(test_sentences, 1, SRC_LANG, TRG_LANG))
+
+        translations = generate(model, test_batches_single)
+        bleu_score = bleu_score_corpus(test_batches_single, translations, TRG_LANG) * 100
+
+        # logger.info(f"BLEU score ..........\t{bleu_score:0.2f}")
+        # logger.info("[done] .... now dumping the translations.")
+
+        fw = open(f"{out_path}.test.out", 'w')
+        for line in translations:
+            fw.write(line.strip() + "\n")
+        fw.close()
 
 
 def train_gru(parameters):
@@ -86,6 +106,7 @@ def train_gru(parameters):
                                      debug=parameters.debug)
 
     # Create a PyTorch Lightning trainer with the generation callback
+    # data_module.test.
 
     translation_callback = TranslationCallback(save_to_disk=True)
     # inter_callback = InterpolationCallback(save_to_disk=True)

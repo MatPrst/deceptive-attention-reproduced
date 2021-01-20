@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from torch import nn, optim
 
 import utils
+from tqdm import tqdm
 
 long_type = torch.LongTensor
 float_type = torch.FloatTensor
@@ -129,6 +130,50 @@ class BiGRU(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
         pass
+
+    @torch.no_grad()
+    def translate(self, batch_size):
+        """
+        Function for interpolating between a batch of pairs of randomly sampled
+        images. The interpolation is performed on the latent input space of the
+        generator.
+
+        Inputs:
+            batch_size          - Number of sentences to translate.
+        Outputs:
+            x - Generated images of shape [B,interpolation_steps+2,C,H,W]
+        """
+
+        # NOTE this assumes batch size 1
+        # model.eval()
+
+        # Get 1 batch from data
+
+
+        epoch_loss = 0
+        total_correct = 0.0
+        total_trg = 0.0
+        # total_src = 0.0
+        total_attn_mass_imp = 0.0
+        generated_lines = []
+
+        for src, src_len, _, _, _ in tqdm(data):
+            # create tensors here...
+            src = torch.tensor(src).type(long_type).permute(1, 0)
+            # trg = torch.tensor(trg).type(long_type).permute(1, 0)
+
+            output, attention = self.model(src, src_len, None, 0)  # turn off teacher forcing
+
+            output = output[1:].squeeze(dim=1)
+            # output = [(trg sent len - 1), output dim]
+
+            predictions = torch.argmax(output, dim=1)  # long tensor
+            # shape [trg len - 1]
+            generated_tokens = [TRG_LANG.get_word(w) for w in predictions.cpu().numpy()]
+
+            generated_lines.append(" ".join(generated_tokens))
+
+        return generated_lines
 
 
 # NOTE: parts of the code are inspired from Tutorial 4 in

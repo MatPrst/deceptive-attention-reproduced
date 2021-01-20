@@ -469,17 +469,17 @@ def train(task=TASK,
         writer.close()
 
 
-def generate_translations(model, sentences, logger ):
+def generate_translations(model, sentences, logger):
     test_sentences = sentences[2]
     test_batches_single = list(get_batches(test_sentences, 1, SRC_LANG, TRG_LANG))
 
-    logger.info('batch single ', test_batches_single)
-    logger.info('batch single length ', len(test_batches_single))
+    logger.info(f'batch single {str(test_batches_single)}')
+    logger.info(f'batch single length {str(len(test_batches_single))}')
 
     output_lines = generate(model, test_batches_single)
     score = bleu_score_corpus(test_batches_single, output_lines, TRG_LANG)
 
-    return output_lines, score * 100        # report it in percentage
+    return output_lines, score * 100  # report it in percentage
 
 
 def main():

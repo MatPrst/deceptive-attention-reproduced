@@ -5,16 +5,10 @@ import pytorch_lightning as pl
 from transformers import AutoTokenizer
 
 import numpy as np
-
 import sys
 
-# #TODO: implement Dataset object for Gender Identification task
-# class GenderDataset(Dataset):
-#     raise NotImplementedError
-#
 # #TODO: implement Dataset object for SST task
-# class SSTDataset(Dataset):
-#     raise NotImplementedError
+
 
 def compute_m(sentence_ids, impermissible_ids):
     """
@@ -143,7 +137,7 @@ class PronounDataset(Dataset):
         sentence = torch.from_numpy(sentence)
         attention_mask = torch.from_numpy(attention_mask)
         mask_vector = torch.from_numpy(mask_vector)
-        mask_matrix = torch.from_numpy(mask_matrix)
+        mask_matrix = torch.from_numpy(mask_matrix).float()
 
         # return sample dict with sentence, associated label, and one-hot mask_vectors m
         sample = {'sentences': sentence, 'attention_masks': attention_mask,
@@ -196,6 +190,7 @@ class OccupationDataset(Dataset):
             truncation=True
         )
 
+
         sentence = tokenized['input_ids'][0]
         attention_mask = tokenized['attention_mask'][0]
 
@@ -209,7 +204,7 @@ class OccupationDataset(Dataset):
         sentence = torch.from_numpy(sentence)
         attention_mask = torch.from_numpy(attention_mask)
         mask_vector = torch.from_numpy(mask_vector)
-        mask_matrix = torch.from_numpy(mask_matrix)
+        mask_matrix = torch.from_numpy(mask_matrix).float()
 
         # return sample dict with sentence, associated label, and one-hot mask_vectors m
         sample = {'sentences': sentence, 'attention_masks': attention_mask,
@@ -219,14 +214,15 @@ class OccupationDataset(Dataset):
 class GenericDataModule(pl.LightningDataModule):
     """
     This Lightning module takes a "task" argument and produces DataLoaders for that task
-    using predefined task-Dataset instances
+    using predefined task-specific Dataset instances
     """
-    def __init__(self, task, anonymization, max_length, batch_size):
+    def __init__(self, task, anonymization, max_length, batch_size, num_workers):
         super().__init__()
         self.task = task
         self.anonymization = anonymization
         self.max_length = max_length
         self.batch_size = batch_size
+        self.num_workers = num_workers
 
     def setup(self, stage=None):
         if self.task == 'occupation':
@@ -239,11 +235,11 @@ class GenericDataModule(pl.LightningDataModule):
             self.test = PronounDataset(dataset='test', max_length=self.max_length,  anonymization=self.anonymization)
 
     def train_dataloader(self):
-        return DataLoader(self.train, batch_size=self.batch_size, num_workers=4)
+        return DataLoader(self.train, batch_size=self.batch_size, num_workers=self.num_workers)
 
     def val_dataloader(self):
-        return DataLoader(self.val, batch_size=self.batch_size, num_workers=4)
+        return DataLoader(self.val, batch_size=self.batch_size, num_workers=self.num_workers)
 
     def test_dataloader(self):
-        return DataLoader(self.test, batch_size=self.batch_size, num_workers=4)
+        return DataLoader(self.test, batch_size=self.batch_size, num_workers=self.num_workers)
 

@@ -25,7 +25,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 class BERTModel(LightningModule):
 
-    def __init__(self, dropout, penalize, lambeda, penalty_fn):
+    def __init__(self, dropout, lr, penalize, lambeda, penalty_fn):
         super().__init__()
         """
         Args:
@@ -33,6 +33,7 @@ class BERTModel(LightningModule):
             tokenizer: transformers object used to convert raw text to tensors
         """
         self.dropout = dropout
+        self.lr = lr
         self.penalize = penalize
         self.lambeda = lambeda
         self.penalty_fn = penalty_fn
@@ -48,7 +49,7 @@ class BERTModel(LightningModule):
 
     def configure_optimizers(self):
         "This method handles optimization of params for PyTorch lightning"
-        return Adam(self.parameters(), lr=config.lr)
+        return Adam(self.parameters(), lr=self.lr)
 
     def forward(self, x, attention_mask, labels, mask_matrices):
         "This method defines how the data is passed through the net."
@@ -78,20 +79,20 @@ class BERTModel(LightningModule):
         # Compute loss w.r.t. predictions and labels
         loss = outputs.loss
 
+        # Compute R component and add to loss
+        R, attention_mass = self.compute_R(outputs, mask_vectors, self.lambeda, self.penalty_fn)
+        R = R.mean()
         # flag to toggle manipulation of attention maps
         if self.penalize:
-
-            # Compute R component and add to loss
-            R, attention_mass = self.compute_R(outputs, mask_vectors, self.lambeda, self.penalty_fn)
-            R = R.mean()
             loss += R
-            self.log('train_penalty_R', R)
-            self.log('train_attention_mass', attention_mass)
+
+        self.log('train_penalty_R', R)
+        self.log('train_attention_mass', attention_mass)
 
         preds = outputs.logits
 
         # Log train stats to Tensorboard
-        self.log('training_loss', loss)
+        self.log('train_loss', loss)
         self.log('train_acc_step', self.accuracy(preds, labels))
 
         return loss
@@ -114,15 +115,14 @@ class BERTModel(LightningModule):
         # Compute loss w.r.t. predictions and labels
         loss = outputs.loss
 
+        # Compute R component and add to loss
+        R, attention_mass = self.compute_R(outputs, mask_vectors, self.lambeda, self.penalty_fn)
+        R = R.mean()
         # flag to toggle manipulation of attention maps
         if self.penalize:
-
-            # Compute R component and add to loss
-            R, attention_mass = self.compute_R(outputs, mask_vectors, self.lambeda, self.penalty_fn)
-            R = R.mean()
             loss += R
-            self.log('dev_penalty_R', R)
-            self.log('dev_attention_mass', attention_mass)
+        self.log('dev_penalty_R', R)
+        self.log('dev_attention_mass', attention_mass)
 
         preds = outputs.logits
 
@@ -148,15 +148,14 @@ class BERTModel(LightningModule):
         # Compute loss w.r.t. predictions and labels
         loss = outputs.loss
 
+        # Compute R component and add to loss
+        R, attention_mass = self.compute_R(outputs, mask_vectors, self.lambeda, self.penalty_fn)
+        R = R.mean()
         # flag to toggle manipulation of attention maps
         if self.penalize:
-
-            # Compute R component and add to loss
-            R, attention_mass = self.compute_R(outputs, mask_vectors, self.lambeda, self.penalty_fn)
-            R = R.mean()
             loss += R
-            self.log('test_penalty_R', R)
-            self.log('test_attention_mass', attention_mass)
+        self.log('test_penalty_R', R)
+        self.log('test_attention_mass', attention_mass)
 
         preds = outputs.logits
 
@@ -214,40 +213,15 @@ class BERTModel(LightningModule):
         # convert attention matrices to vectors of shape [batch_sz x num_heads x n]
         attention_vectors = self.convert2vectors(attention_matrices)
 
-        # old code
-        if penalty_fn == 'mean2':
-            sequence_length = attention_vectors.shape[-1]
-
-            # reshape tensor of shape batch_size * 12 x 12 x seq_length to
-            # shape batch_size, 144, seq_length
-            attention_vectors = attention_vectors.reshape(config.batch_size, 12**2, sequence_length)
-
-            # add implicit dimension to mask_vectors such that it becomes a rank-4 tensor
-            mask_vectors = mask_vectors.unsqueeze(1)
-
-            # compute impermissible attention tensor of shape (batch_size, ||Heads H||, seq_length)
-            impermissible_attention = attention_vectors * mask_vectors
-
-            # Sum over last dim to get impermissible attention per head
-            impermissible_attention = torch.sum(impermissible_attention, dim=2)
-
-            # Compute the complement of impermissible attention, or permissible attention
-            permissible_attention = 1 - impermissible_attention
-
-            # log permissible attention per head
-            log_permissible_attention = torch.log(permissible_attention)
-
-            # Compute R value using 'mean' method by summing over H dimension and dividing by 144
-            R = (-lambeda/144)*(torch.sum(log_permissible_attention, dim=1))
-
-            return R
-
         # add implicit dimension to mask_vectors such that it becomes a rank-4 tensor
         mask_vectors = mask_vectors.unsqueeze(1)
+
         # compute impermissible attention tensor of shape (batch_size, ||Heads H||, seq_length)
         impermissible_attention = attention_vectors * mask_vectors
+
         # Sum over last dim to get impermissible attention per head
         impermissible_attention = torch.sum(impermissible_attention, dim=2)
+
         # Compute the complement of impermissible attention, or permissible attention
         permissible_attention = 1 - impermissible_attention
         # log permissible attention per head
@@ -263,7 +237,7 @@ class BERTModel(LightningModule):
 
         # compute attention mass:
         # "the sum of attention values over the set of impermissible tokens averaged over all the examples"
-        attention_mass = torch.mean(torch.sum(impermissible_attention, dim=1))
+        attention_mass = torch.mean(torch.mean(impermissible_attention, dim=1))*100
 
         return R, attention_mass
 
@@ -277,15 +251,26 @@ def main(args):
         print(str(arg) + ': ' + str(getattr(args, arg)))
     print('no of devices found: {}\n\nStandard transformer warning:\n'.format(device_count()))
 
+    if config.debug:
+        torch.autograd.set_detect_anomaly(True)
+
     # Logic to define model with specified R calculation, specified self attn mask
     model = BERTModel(dropout=config.dropout,
+                      lr=config.lr,
                       penalize=config.penalize,
                       lambeda=config.lambeda,
                       penalty_fn=config.penalty_fn)
 
+    print('\n GPU loading prompt \n ') if device_count() > 0 else print('')
+
     # Main Lightning code
+
     tb_logger = pl_loggers.TensorBoardLogger('logs/')
-    trainer = Trainer(gpus=config.gpus, logger=tb_logger, log_every_n_steps=1)
+    trainer = Trainer(gpus=config.gpus,
+                      logger=tb_logger,
+                      log_every_n_steps=config.log_every,
+                      accelerator=config.accelerator)
+
     dm = GenericDataModule(task=config.task,
                            anonymization=config.anon,
                            max_length=config.max_length,
@@ -298,11 +283,24 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
 
-    # Learning specific args
-    parser.add_argument('--gpus', default=None)
+    parser.add_argument('--debug', default=False, type=bool,
+                        help='toggle elaborate torch errors')
 
-    parser.add_argument('--num_workers', default=4, type=int,
+    # Torch / lightning specific args
+    parser.add_argument('--gpus', default=device_count())
+
+    accelerator = 'ddp_spawn' if device_count() > 0 else None
+    parser.add_argument('--accelerator', default=accelerator)
+
+    parser.add_argument('--num_workers', default=0, type=int,
                         help='no. of workers for DataLoaders')
+
+    log_every = 10 if device_count() > 0 else 1
+    parser.add_argument('--log_every', default=log_every, type=int,
+                        help='number of steps between loggings')
+
+    # Learning specific args
+    # batch_size = 32 if device_count() > 0 else 16
     parser.add_argument('--batch_size', default=16, type=int,
                         help='no. of sentences sampled per pass')
     parser.add_argument('--lr', default=5e-5, type=float,
@@ -322,7 +320,7 @@ if __name__ == '__main__':
     parser.add_argument('--lambeda', default=1, type=float,
                         help='penalty coefficient')
     parser.add_argument('--penalty_fn', default='mean', type=str,
-                        help='penalty fn [options: mean or max')
+                        help='penalty fn [options: "mean" or "max" ')
 
     config = parser.parse_args()
 

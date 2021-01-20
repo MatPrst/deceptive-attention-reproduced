@@ -455,7 +455,7 @@ def train(task=TASK,
         # generate the output to compute bleu scores as well...
         logger.info("Generating the output translations from the model.")
 
-        translations, bleu_score = generate_translations(model, sentences)
+        translations, bleu_score = generate_translations(model, sentences, logger)
 
         logger.info(f"BLEU score ..........\t{bleu_score:0.2f}")
         logger.info("[done] .... now dumping the translations.")
@@ -469,9 +469,12 @@ def train(task=TASK,
         writer.close()
 
 
-def generate_translations(model, sentences):
+def generate_translations(model, sentences, logger ):
     test_sentences = sentences[2]
     test_batches_single = list(get_batches(test_sentences, 1, SRC_LANG, TRG_LANG))
+
+    logger.info('batch single ', test_batches_single)
+    logger.info('batch single length ', len(test_batches_single))
 
     output_lines = generate(model, test_batches_single)
     score = bleu_score_corpus(test_batches_single, output_lines, TRG_LANG)

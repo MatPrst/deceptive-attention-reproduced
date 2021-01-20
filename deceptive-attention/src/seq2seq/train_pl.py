@@ -8,7 +8,7 @@ from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 import utils
-from batch_utils import SentenceDataModule, SRC_LANG, TRG_LANG
+from batch_utils import SentenceDataModule, TRG_LANG
 from model import BiGRU
 from utils import *
 
@@ -30,7 +30,7 @@ EOS_IDX = utils.EOS_token
 
 class TranslationCallback(pl.Callback):
 
-    def __init__(self, batch_size=4, every_n_epochs=10, save_to_disk=False):
+    def __init__(self, sentences, out_path, every_n_epochs=10, save_to_disk=False):
         """
         Callback for translating sentences to TensorBoard and/or save them to disk every N epochs across training.
         Inputs:
@@ -39,9 +39,10 @@ class TranslationCallback(pl.Callback):
             save_to_disk        - If True, the samples should be saved to disk as well.
         """
         super().__init__()
-        self.batch_size = batch_size
+        self.sentences = sentences
         self.every_n_epochs = every_n_epochs
         self.save_to_disk = save_to_disk
+        self.out_path = out_path
 
     def on_epoch_end(self, trainer, pl_module):
         """
@@ -49,7 +50,7 @@ class TranslationCallback(pl.Callback):
         Call the save_and_sample function every N epochs.
         """
         if (trainer.current_epoch + 1) % self.every_n_epochs == 0:
-            self.translate(trainer, pl_module, trainer.current_epoch + 1)
+            self.generate(trainer, pl_module, trainer.current_epoch + 1)
 
     def generate(self, trainer, pl_module, epoch):
         """
@@ -63,26 +64,11 @@ class TranslationCallback(pl.Callback):
                           and saving of the files.
         """
 
-        # interpolated_images = pl_module.interpolate(self.batch_size, self.interpolation_steps)
-        #
-        # grid = torchvision.utils.make_grid(interpolated_images, nrow=7, normalize=True, range=(-1, 1))
-        # save_image(grid, os.path.join(trainer.logger.log_dir, 'gan_interpolate.png'))
-        #
-        # logger.info("Generating the output translations from the model.")
+        translations = pl_module.translate(self.sentences)
+        bleu_score = bleu_score_corpus(self.sentences, translations, TRG_LANG) * 100
+        trainer.logger.experiment.add_scalar("bleu_score", bleu_score, global_step=epoch)
 
-        # run
-        pl_module.translate(1)
-
-        test_sentences = sentences[2]
-        test_batches_single = list(get_batches(test_sentences, 1, SRC_LANG, TRG_LANG))
-
-        translations = generate(model, test_batches_single)
-        bleu_score = bleu_score_corpus(test_batches_single, translations, TRG_LANG) * 100
-
-        # logger.info(f"BLEU score ..........\t{bleu_score:0.2f}")
-        # logger.info("[done] .... now dumping the translations.")
-
-        fw = open(f"{out_path}.test.out", 'w')
+        fw = open(f"{self.out_path}.test.out", 'w')
         for line in translations:
             fw.write(line.strip() + "\n")
         fw.close()
@@ -106,10 +92,11 @@ def train_gru(parameters):
                                      debug=parameters.debug)
 
     # Create a PyTorch Lightning trainer with the generation callback
-    # data_module.test.
 
-    translation_callback = TranslationCallback(save_to_disk=True)
-    # inter_callback = InterpolationCallback(save_to_disk=True)
+    suffix = 'suff'
+    out_path = f"{DATA_VOCAB_PATH}{parameters.task}{suffix}_seed={str(parameters.seed)}_coeff={str(parameters.loess_coeff)}_num-train={str(parameters.num_train)}"
+
+    translation_callback = TranslationCallback(data_module.test.samples, out_path=out_path, save_to_disk=True)
     callbacks = [translation_callback]
 
     # callbacks = []
@@ -148,7 +135,7 @@ def train_gru(parameters):
     # gen_callback.sample_and_save(trainer, model, epoch=0)  # Initial sample
     trainer.fit(model, data_module)
 
-    translation_callback.generate(trainer, model, epoch=0)
+    translation_callback.generate(trainer, model, epoch=parameters.epochs)
 
     return model
 

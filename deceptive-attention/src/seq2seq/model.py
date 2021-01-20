@@ -7,6 +7,7 @@ from torch import nn, optim
 
 import utils
 from tqdm import tqdm
+from batch_utils import TRG_LANG
 
 long_type = torch.LongTensor
 float_type = torch.FloatTensor
@@ -132,7 +133,7 @@ class BiGRU(pl.LightningModule):
         pass
 
     @torch.no_grad()
-    def translate(self, batch_size):
+    def translate(self, sentences):
         """
         Function for interpolating between a batch of pairs of randomly sampled
         images. The interpolation is performed on the latent input space of the
@@ -147,9 +148,6 @@ class BiGRU(pl.LightningModule):
         # NOTE this assumes batch size 1
         # model.eval()
 
-        # Get 1 batch from data
-
-
         epoch_loss = 0
         total_correct = 0.0
         total_trg = 0.0
@@ -157,7 +155,7 @@ class BiGRU(pl.LightningModule):
         total_attn_mass_imp = 0.0
         generated_lines = []
 
-        for src, src_len, _, _, _ in tqdm(data):
+        for src, src_len, _, _, _ in tqdm(sentences):
             # create tensors here...
             src = torch.tensor(src).type(long_type).permute(1, 0)
             # trg = torch.tensor(trg).type(long_type).permute(1, 0)

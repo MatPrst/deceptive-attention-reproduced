@@ -42,6 +42,7 @@ class SentenceDataset(Dataset):
         # parallel should be at least equal len
         assert (len(src_sentences) == len(trg_sentences))
 
+        self.samples = []
         self.src_samples = []
         self.trg_samples = []
         self.aligned_outputs = []
@@ -96,11 +97,11 @@ class SentenceDataset(Dataset):
 
             assert (src_sample.shape[1] == max_src_len)
 
+            self.samples.append([src_sample, len(src_sample), trg_sample, len(trg_sample), aligned_outputs])
+
             self.src_samples.append(src_sample)
             self.trg_samples.append(trg_sample)
             self.aligned_outputs.append(aligned_outputs)
-
-        print('ready')
 
     def __len__(self):
         return len(self.src_samples)
@@ -110,13 +111,13 @@ class SentenceDataset(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
-        src_sample = self.src_samples[idx]
-        trg_sample = self.trg_samples[idx]
-        aligned_outputs = self.aligned_outputs[idx]
+        # src_sample = self.src_samples[idx]
+        # trg_sample = self.trg_samples[idx]
+        # aligned_outputs = self.aligned_outputs[idx]
+        #
+        # sample = [src_sample, len(src_sample), trg_sample, len(trg_sample), aligned_outputs]
 
-        sample = [src_sample, len(src_sample), trg_sample, len(trg_sample), aligned_outputs]
-
-        return sample
+        return self.samples[idx]
 
 
 class SentenceDataModule(pl.LightningDataModule):

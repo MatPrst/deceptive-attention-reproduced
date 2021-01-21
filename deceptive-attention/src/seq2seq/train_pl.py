@@ -89,6 +89,8 @@ def train_gru(parameters):
     task = parameters.task
     num_train = parameters.num_train
 
+    print('Initializing data module')
+
     data_module = SentenceDataModule(task=task,
                                      batch_size=parameters.batch_size,
                                      num_train=num_train,
@@ -102,7 +104,7 @@ def train_gru(parameters):
     out_path = f"{DATA_VOCAB_PATH}{task}{suffix}_seed={str(parameters.seed)}_coeff={str(parameters.loss_coeff)}_num-train={str(num_train)}"
 
     callbacks = []
-    if task == 'en_de':
+    if task == 'en-de':
         print('Creating translation callback.')
         translation_callback = TranslationCallback(data_module.test.samples, out_path=out_path, save_to_disk=True)
         callbacks = [translation_callback]

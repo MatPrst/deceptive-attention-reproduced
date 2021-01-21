@@ -133,8 +133,6 @@ class SentenceDataModule(pl.LightningDataModule):
         self.num_train = num_train
         self.debug = debug
 
-    # noinspection PyAttributeOutsideInit
-    def setup(self, stage=None):
         self.train = SentenceDataset(self.task, self.num_train, self.batch_size, dataset='train', debug=self.debug)
 
         # don't accept new words from validation and test set
@@ -143,6 +141,18 @@ class SentenceDataModule(pl.LightningDataModule):
 
         self.val = SentenceDataset(self.task, self.num_train, self.batch_size, dataset='dev', debug=self.debug)
         self.test = SentenceDataset(self.task, self.num_train, self.batch_size, dataset='test', debug=self.debug)
+
+    # noinspection PyAttributeOutsideInit
+    def setup(self, stage=None):
+        # self.train = SentenceDataset(self.task, self.num_train, self.batch_size, dataset='train', debug=self.debug)
+        #
+        # # don't accept new words from validation and test set
+        # SRC_LANG.stop_accepting_new_words()
+        # TRG_LANG.stop_accepting_new_words()
+        #
+        # self.val = SentenceDataset(self.task, self.num_train, self.batch_size, dataset='dev', debug=self.debug)
+        # self.test = SentenceDataset(self.task, self.num_train, self.batch_size, dataset='test', debug=self.debug)
+        pass
 
     def train_dataloader(self):
         return DataLoader(self.train, batch_size=self.batch_size, num_workers=4)

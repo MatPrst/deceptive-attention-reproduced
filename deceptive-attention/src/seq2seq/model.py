@@ -49,12 +49,9 @@ class BiGRU(pl.LightningModule):
         if attention_type == 'uniform':
             dec = DecoderUniform(output_dim, decoder_emb_dim, encoder_hid_dim, decoder_hid_dim, decoder_dropout,
                                  attention)
-            suffix = "_uniform"
         elif attention_type == 'no_attention' or decode_with_no_attention:
             dec = DecoderNoAttn(output_dim, decoder_emb_dim, encoder_hid_dim, decoder_hid_dim, decoder_dropout,
                                 attention)
-            if attention_type == 'no_attention':
-                suffix = "_no-attn"
         else:
             dec = Decoder(output_dim, decoder_emb_dim, encoder_hid_dim, decoder_hid_dim, decoder_dropout, attention)
 
@@ -150,14 +147,13 @@ class BiGRU(pl.LightningModule):
 
         # ATTENTION this assumes batch size 1, code only works with batch_size 1
 
-        self.eval()
+        # self.eval()
 
         translations = []
         targets = []
 
         for src, src_len, trg, trg_len, _ in tqdm(test_loader):
-
-            # if len(translations) > 2:
+            # if len(translations) > 5:
             #     break
 
             # create tensors here...

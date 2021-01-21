@@ -30,7 +30,7 @@ EOS_IDX = utils.EOS_token
 
 class TranslationCallback(pl.Callback):
 
-    def __init__(self, samples, out_path, every_n_epochs=10, save_to_disk=False):
+    def __init__(self, samples, test_loader, out_path, every_n_epochs=10, save_to_disk=False):
         """
         Callback for translating sentences to TensorBoard and/or save them to disk every N epochs across training.
         Inputs:
@@ -40,6 +40,7 @@ class TranslationCallback(pl.Callback):
         """
         super().__init__()
         self.samples = samples
+        self.test_loader = test_loader
         self.every_n_epochs = every_n_epochs
         self.save_to_disk = save_to_disk
         self.out_path = out_path
@@ -64,7 +65,7 @@ class TranslationCallback(pl.Callback):
                           and saving of the files.
         """
 
-        translations = pl_module.translate(self.samples)
+        translations = pl_module.translate(self.test_loader)
         bleu_score = bleu_score_corpus(self.samples, translations, TRG_LANG) * 100
         trainer.logger.experiment.add_scalar("bleu_score", bleu_score, global_step=epoch)
 
@@ -102,6 +103,7 @@ def train_gru(parameters):
     if task == 'en-de':
         print('Creating translation callback ...')
         translation_callback = TranslationCallback(data_module.test.samples,
+                                                   data_module.test_dataloader(batch_size=1),
                                                    out_path=get_out_path(parameters),
                                                    save_to_disk=True)
 

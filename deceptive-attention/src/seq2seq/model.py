@@ -136,7 +136,7 @@ class BiGRU(pl.LightningModule):
         pass
 
     @torch.no_grad()
-    def translate(self, samples):
+    def translate(self, test_loader):
         """
         Function for interpolating between a batch of pairs of randomly sampled
         images. The interpolation is performed on the latent input space of the
@@ -148,7 +148,8 @@ class BiGRU(pl.LightningModule):
             x - Generated images of shape [B,interpolation_steps+2,C,H,W]
         """
 
-        # NOTE this assumes batch size 1
+        # ATTENTION this assumes batch size 1, code only works with batch_size 1
+
         # model.eval()
 
         epoch_loss = 0
@@ -158,16 +159,10 @@ class BiGRU(pl.LightningModule):
         total_attn_mass_imp = 0.0
         generated_lines = []
 
-        for src, src_len, _, _, _ in tqdm(samples):
-
-            if len(src.shape) != 3:
-                src = np.expand_dims(src, axis=0)
-
-            if not torch.is_tensor(src_len):
-                src_len = torch.tensor([src_len])
+        for src, src_len, _, _, _ in tqdm(test_loader):
 
             # create tensors here...
-            src = torch.tensor(src).type(long_type).permute(1, 0)
+            src = src.clone().detach().type(long_type).permute(1, 0)
             # trg = torch.tensor(trg).type(long_type).permute(1, 0)
 
             output, attention = self.model(src, src_len, None, 0)  # turn off teacher forcing

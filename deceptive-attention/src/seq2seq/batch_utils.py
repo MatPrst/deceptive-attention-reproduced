@@ -150,9 +150,11 @@ class SentenceDataModule(pl.LightningDataModule):
     def val_dataloader(self):
         return DataLoader(self.val, batch_size=self.batch_size, num_workers=4)
 
-    def test_dataloader(self):
+    def test_dataloader(self, batch_size=None):
+        if batch_size is None:
+            batch_size = self.batch_size
         # pin_memory=True
-        return DataLoader(self.test, batch_size=self.batch_size, num_workers=4)
+        return DataLoader(self.test, batch_size=batch_size, num_workers=4)
 
     def prepare_data(self, *args, **kwargs):
         # download or similar ...

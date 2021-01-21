@@ -94,7 +94,7 @@ def train_gru(parameters):
     # Create a PyTorch Lightning trainer with the generation callback
 
     suffix = 'suff'
-    out_path = f"{DATA_VOCAB_PATH}{parameters.task}{suffix}_seed={str(parameters.seed)}_coeff={str(parameters.loess_coeff)}_num-train={str(parameters.num_train)}"
+    out_path = f"{DATA_VOCAB_PATH}{parameters.task}{suffix}_seed={str(parameters.seed)}_coeff={str(parameters.loss_coeff)}_num-train={str(parameters.num_train)}"
 
     translation_callback = TranslationCallback(data_module.test.samples, out_path=out_path, save_to_disk=True)
     callbacks = [translation_callback]

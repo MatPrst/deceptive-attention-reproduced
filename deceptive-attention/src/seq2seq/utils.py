@@ -82,21 +82,21 @@ def bleu_score_corpus(references, candidates, trg_lang):
     # candidates are already words
     # targets are indices --> converting indices to word tokens
 
-    target_sentences = []
-    for ref in references:
-        # getting the target indices and cutting off <eof> and <sos> from target sentences
-        trg_tokens = [trg_lang.get_word(w) for w in ref[2][0][1:-1]]
-        target_sentences.append([trg_tokens])
+    # target_sentences = []
+    # for ref in references:
+    #     # getting the target indices and cutting off <eof> and <sos> from target sentences
+    #     trg_tokens = [trg_lang.get_word(w) for w in ref[2][0][1:-1]]
+    #     target_sentences.append([trg_tokens])
 
     candidate_sentences = [candidate.split() for candidate in candidates]
 
     for i in range(len(candidate_sentences[:10])):
         print('candidate ', candidate_sentences[i])
-        print('reference ', target_sentences[i])
+        print('reference ', references[i])
         print('\n')
 
     # Expected structure by NLTK
     # target Sentences: [[...], [...]]
     # candidate Sentences: [..., ...]
 
-    return nltk.translate.bleu_score.corpus_bleu(target_sentences, candidate_sentences)
+    return nltk.translate.bleu_score.corpus_bleu(references, candidate_sentences)

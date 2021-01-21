@@ -65,8 +65,11 @@ class TranslationCallback(pl.Callback):
                           and saving of the files.
         """
 
-        translations = pl_module.translate(self.test_loader)
-        bleu_score = bleu_score_corpus(self.samples, translations, TRG_LANG) * 100
+        translations, targets = pl_module.translate(self.test_loader)
+        # bleu_score = bleu_score_corpus(self.samples, translations, TRG_LANG) * 100
+        bleu_score = bleu_score_corpus(targets, translations, TRG_LANG) * 100
+        print('BLEU score: ', bleu_score)
+
         trainer.logger.experiment.add_scalar("bleu_score", bleu_score, global_step=epoch)
 
         fw = open(f"{self.out_path}.test.out", 'w')

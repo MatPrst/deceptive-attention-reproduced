@@ -158,12 +158,13 @@ class BiGRU(pl.LightningModule):
         total_attn_mass_imp = 0.0
         generated_lines = []
 
-        print(len(samples))
-
         for src, src_len, _, _, _ in tqdm(samples):
 
             if len(src.shape) != 3:
                 src = np.expand_dims(src, axis=0)
+
+            if not torch.is_tensor(src_len):
+                src_len = torch.tensor([src_len])
 
             # create tensors here...
             src = torch.tensor(src).type(long_type).permute(1, 0)

@@ -134,7 +134,6 @@ class SentenceDataModule(pl.LightningDataModule):
 
     # noinspection PyAttributeOutsideInit
     def setup(self, stage=None):
-        print('setup called')
         self.train = SentenceDataset(self.task, self.num_train, self.batch_size, dataset='train', debug=self.debug)
 
         # don't accept new words from validation and test set

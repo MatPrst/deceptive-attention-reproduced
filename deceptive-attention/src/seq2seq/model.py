@@ -1,11 +1,11 @@
 import random
 
+import numpy as np
 import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
 from torch import nn, optim
 from tqdm import tqdm
-import numpy as np
 
 import utils
 from batch_utils import TRG_LANG
@@ -150,20 +150,15 @@ class BiGRU(pl.LightningModule):
 
         # ATTENTION this assumes batch size 1, code only works with batch_size 1
 
-        # model.eval()
+        self.eval()
 
-        epoch_loss = 0
-        total_correct = 0.0
-        total_trg = 0.0
-        # total_src = 0.0
-        total_attn_mass_imp = 0.0
-        generated_lines = []
+        translations = []
         targets = []
 
         for src, src_len, trg, trg_len, _ in tqdm(test_loader):
 
-            if len(generated_lines) > 2:
-                break
+            # if len(translations) > 2:
+            #     break
 
             # create tensors here...
             src = src.clone().detach().type(long_type).permute(1, 0)
@@ -178,19 +173,19 @@ class BiGRU(pl.LightningModule):
             # shape [trg len - 1]
             generated_tokens = [TRG_LANG.get_word(w) for w in predictions.cpu().numpy()]
 
-            generated_lines.append(" ".join(generated_tokens))
+            translations.append(" ".join(generated_tokens))
 
             # still with padding
             target = trg[0].cpu().numpy()
 
             index_eof = np.where(trg[0].cpu().numpy() == 2)
-            assert len(index_eof) == 1      # there should only be one <eof>
+            assert len(index_eof) == 1  # there should only be one <eof>
             target = target[1:int(index_eof[0])]
 
             target_tokens = [TRG_LANG.get_word(w) for w in target]
             targets.append(target_tokens)
 
-        return generated_lines, targets
+        return translations, targets
 
 
 # NOTE: parts of the code are inspired from Tutorial 4 in

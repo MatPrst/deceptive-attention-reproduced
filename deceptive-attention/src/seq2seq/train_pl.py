@@ -39,7 +39,6 @@ class TranslationCallback(pl.Callback):
             save_to_disk        - If True, the samples should be saved to disk as well.
         """
         super().__init__()
-        self.samples = samples
         self.test_loader = test_loader
         self.every_n_epochs = every_n_epochs
         self.save_to_disk = save_to_disk
@@ -66,8 +65,7 @@ class TranslationCallback(pl.Callback):
         """
 
         translations, targets = pl_module.translate(self.test_loader)
-        # bleu_score = bleu_score_corpus(self.samples, translations, TRG_LANG) * 100
-        bleu_score = bleu_score_corpus(targets, translations, TRG_LANG) * 100
+        bleu_score = bleu_score_corpus(targets, translations) * 100
         print('BLEU score: ', bleu_score)
 
         trainer.logger.experiment.add_scalar("bleu_score", bleu_score, global_step=epoch)
@@ -145,13 +143,13 @@ def train_gru(parameters):
     # Training
 
     if translation_callback is not None:
-        print('Generate initial translations.')
+        print('Generating initial translations ...')
         translation_callback.generate(trainer, model, epoch=0)
 
     trainer.fit(model, data_module)
 
     if translation_callback is not None:
-        print('Generate final translations.')
+        print('Generating final translations ...')
         translation_callback.generate(trainer, model, epoch=parameters.epochs)
 
     return model

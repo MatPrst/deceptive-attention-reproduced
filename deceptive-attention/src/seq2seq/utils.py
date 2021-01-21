@@ -70,7 +70,7 @@ class Language:
         return padded_seq[:max_len]
 
 
-def bleu_score_corpus(references, candidates, trg_lang):
+def bleu_score_corpus(references, candidates):
     """
     Computes the (test) corpus wide BLEU score using the library NLTK. Takes a list of reference sentences
     (target sentences in target language) as well as candidates, transforms then into the expected format for NLTK
@@ -79,20 +79,12 @@ def bleu_score_corpus(references, candidates, trg_lang):
 
     assert len(candidates) == len(references)
 
-    # candidates are already words
-    # targets are indices --> converting indices to word tokens
-
-    # target_sentences = []
-    # for ref in references:
-    #     # getting the target indices and cutting off <eof> and <sos> from target sentences
-    #     trg_tokens = [trg_lang.get_word(w) for w in ref[2][0][1:-1]]
-    #     target_sentences.append([trg_tokens])
-
     candidate_sentences = [candidate.split() for candidate in candidates]
+    target_sentences = [[reference] for reference in references]
 
     for i in range(len(candidate_sentences[:10])):
         print('candidate ', candidate_sentences[i])
-        print('reference ', references[i])
+        print('reference ', target_sentences[i])
         print('\n')
 
     # Expected structure by NLTK

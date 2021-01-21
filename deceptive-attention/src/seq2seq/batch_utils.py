@@ -47,64 +47,70 @@ class SentenceDataset(Dataset):
         self.trg_samples = []
         self.aligned_outputs = []
 
+        # represent all sentences
         for idx in range(0, len(src_sentences)):
             # get the slice
-            src_sample = src_sentences[idx: idx + self.batch_size]
-            trg_sample = src_sentences[idx: idx + self.batch_size]
-            align_sample = alignment_sentences[idx: idx + self.batch_size]
-
-            # represent them
-            src_sample = [SRC_LANG.get_sent_rep(s) for s in src_sample]
-            trg_sample = [TRG_LANG.get_sent_rep(s) for s in trg_sample]
-
-            # sort by decreasing source len
-            sorted_ids = sorted(enumerate(src_sample), reverse=True, key=lambda x: len(x[1]))
-            src_sample = [src_sample[i] for i, v in sorted_ids]
-            trg_sample = [trg_sample[i] for i, v in sorted_ids]
-            align_sample = [align_sample[i] for i, v in sorted_ids]
-
-            src_len = [len(s) for s in src_sample]
-            trg_len = [len(t) for t in trg_sample]
-
-            # large set seq len
-            max_src_len = max(src_len)
-            max_trg_len = max(trg_len)
-
-            # pad the extra indices
-            src_sample = SRC_LANG.pad_sequences(src_sample, max_src_len)
-            trg_sample = TRG_LANG.pad_sequences(trg_sample, max_trg_len)
-
-            # generated masks
-            aligned_outputs = []
-
-            for alignment in align_sample:
-                # print (alignment)
-                current_alignment = np.zeros([max_trg_len, max_src_len])
-
-                for pair in alignment.strip().split():
-                    src_i, trg_j = pair.split("-")
-                    src_i = min(int(src_i) + 1, max_src_len - 1)
-                    trg_j = min(int(trg_j) + 1, max_trg_len - 1)
-                    current_alignment[trg_j][src_i] = 1
-
-                aligned_outputs.append(current_alignment)
-
-            # numpy them
-            src_sample = np.array(src_sample, dtype=np.int64)
-            trg_sample = np.array(trg_sample, dtype=np.int64)
-            aligned_outputs = np.array(aligned_outputs)
-            # align output is batch_size x max target_len x max_src_len
-
-            assert (src_sample.shape[1] == max_src_len)
-
-            self.samples.append([src_sample, len(src_sample), trg_sample, len(trg_sample), aligned_outputs])
+            src_sample = SRC_LANG.get_sent_rep(src_sentences[idx])
+            trg_sample = TRG_LANG.get_sent_rep(trg_sentences[idx])
+            align_sample = alignment_sentences[idx]
 
             self.src_samples.append(src_sample)
             self.trg_samples.append(trg_sample)
-            self.aligned_outputs.append(aligned_outputs)
+            self.aligned_outputs.append(align_sample)
+
+        # represent them
+        # src_sample = [SRC_LANG.get_sent_rep(s) for s in src_sample]
+        # trg_sample = [TRG_LANG.get_sent_rep(s) for s in trg_sample]
+
+        # sort by decreasing source len
+        sorted_ids = sorted(enumerate(self.src_samples), reverse=True, key=lambda x: len(x[1]))
+        src_sample = [self.src_samples[i] for i, v in sorted_ids]
+        trg_sample = [self.trg_samples[i] for i, v in sorted_ids]
+        align_sample = [self.aligned_outputs[i] for i, v in sorted_ids]
+
+        src_len = [len(s) for s in src_sample]
+        trg_len = [len(t) for t in trg_sample]
+
+        # large set seq len
+        max_src_len = max(src_len)
+        max_trg_len = max(trg_len)
+
+        # pad the extra indices
+        src_sample = SRC_LANG.pad_sequences(src_sample, max_src_len)
+        trg_sample = TRG_LANG.pad_sequences(trg_sample, max_trg_len)
+
+        # generated masks
+        aligned_outputs = []
+
+        for alignment in align_sample:
+            # print (alignment)
+            current_alignment = np.zeros([max_trg_len, max_src_len])
+
+            for pair in alignment.strip().split():
+                src_i, trg_j = pair.split("-")
+                src_i = min(int(src_i) + 1, max_src_len - 1)
+                trg_j = min(int(trg_j) + 1, max_trg_len - 1)
+                current_alignment[trg_j][src_i] = 1
+
+            aligned_outputs.append(current_alignment)
+
+        # numpy them
+        self.src_samples = np.array(src_sample, dtype=np.int64)
+        self.trg_samples = np.array(trg_sample, dtype=np.int64)
+        self.aligned_outputs = np.array(aligned_outputs)
+        # align output is batch_size x max target_len x max_src_len
+
+        assert (self.src_samples.shape[1] == max_src_len)
+        assert (self.trg_samples.shape[1] == max_trg_len)
+
+        # craft samples out of prepared data
+        for idx in range(0, len(self.src_samples)):
+            src_sample = self.src_samples[idx]
+            trg_sample = self.trg_samples[idx]
+            self.samples.append([src_sample, len(src_sample), trg_sample, len(trg_sample), self.aligned_outputs[idx]])
 
     def __len__(self):
-        return len(self.src_samples)
+        return len(self.samples)
 
     def __getitem__(self, idx):
 

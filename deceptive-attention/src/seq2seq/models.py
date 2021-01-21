@@ -53,7 +53,8 @@ class Encoder(torch.nn.Module):
             inp:  max_seq_len  x batch_size
             inp_lens: list of lens of individuals sequences
         """
-        embedded = self.dropout(self.embedding(src))
+        embedding = self.embedding(src)
+        embedded = self.dropout(embedding)
 
         # embedded = [src sent len, batch size, emb dim]
 

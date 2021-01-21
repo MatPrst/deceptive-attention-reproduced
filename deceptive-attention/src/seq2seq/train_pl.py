@@ -8,7 +8,7 @@ from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 import utils
-from batch_utils import SentenceDataModule, TRG_LANG
+from batch_utils import SentenceDataModule, TRG_LANG, SRC_LANG
 from model import BiGRU
 from utils import *
 
@@ -87,26 +87,24 @@ def train_gru(parameters):
     os.makedirs(DATA_VOCAB_PATH, exist_ok=True)
 
     task = parameters.task
-    num_train = parameters.num_train
 
     print('Initializing data module')
 
     data_module = SentenceDataModule(task=task,
                                      batch_size=parameters.batch_size,
-                                     num_train=num_train,
+                                     num_train=parameters.num_train,
                                      debug=parameters.debug)
 
     print('Initialized data module')
 
     # Create a PyTorch Lightning trainer with the generation callback
 
-    suffix = 'suff'
-    out_path = f"{DATA_VOCAB_PATH}{task}{suffix}_seed={str(parameters.seed)}_coeff={str(parameters.loss_coeff)}_num-train={str(num_train)}"
-
     callbacks = []
     if task == 'en-de':
         print('Creating translation callback.')
-        translation_callback = TranslationCallback(data_module.test.samples, out_path=out_path, save_to_disk=True)
+        translation_callback = TranslationCallback(data_module.test.samples,
+                                                   out_path=get_out_path(parameters),
+                                                   save_to_disk=True)
         callbacks = [translation_callback]
 
     tb_logger = pl_loggers.TensorBoardLogger('logs/')
@@ -124,8 +122,8 @@ def train_gru(parameters):
     # Create model
     pl.seed_everything(parameters.seed)
 
-    model = BiGRU(input_dim=1000,
-                  output_dim=1000,
+    model = BiGRU(input_dim=SRC_LANG.get_vocab_size(),
+                  output_dim=TRG_LANG.get_vocab_size(),
                   encoder_hid_dim=ENC_HID_DIM,
                   decoder_hid_dim=DEC_HID_DIM,
                   encoder_emb_dim=ENC_EMB_DIM,
@@ -148,6 +146,17 @@ def train_gru(parameters):
     # translation_callback.generate(trainer, model, epoch=parameters.epochs)
 
     return model
+
+
+def get_out_path(parameters):
+    suffix = ''
+    if parameters.attention == 'uniform':
+        suffix = "_uniform"
+    elif parameters.attention == 'no_attention':
+        suffix = "_no-attn"
+
+    return f"{DATA_VOCAB_PATH}{parameters.task}{suffix}_seed={str(parameters.seed)}_coeff=" \
+           f"{str(parameters.loss_coeff)}_num-train={str(parameters.num_train)}"
 
 
 if __name__ == '__main__':

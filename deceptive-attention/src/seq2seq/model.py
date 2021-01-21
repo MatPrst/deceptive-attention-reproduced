@@ -4,9 +4,9 @@ import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
 from torch import nn, optim
+from tqdm import tqdm
 
 import utils
-from tqdm import tqdm
 from batch_utils import TRG_LANG
 
 long_type = torch.LongTensor
@@ -88,6 +88,7 @@ class BiGRU(pl.LightningModule):
 
         # create tensors here...
         # src.clone().detach()
+        print('before permute ', src.shape)
         src = src.clone().detach().type(long_type).permute(1, 0)
         trg = trg.clone().detach().type(long_type).permute(1, 0)
         alignment = alignment.clone().detach().type(float_type).permute(1, 0, 2)
@@ -127,6 +128,8 @@ class BiGRU(pl.LightningModule):
 
         loss = self.loss_module(output, trg) - self.coefficient * torch.log(1 - attn_mass_imp / non_pad_tokens_trg)
 
+        return loss
+
     def validation_step(self, batch, batch_idx):
         pass
 
@@ -134,14 +137,14 @@ class BiGRU(pl.LightningModule):
         pass
 
     @torch.no_grad()
-    def translate(self, sentences):
+    def translate(self, samples):
         """
         Function for interpolating between a batch of pairs of randomly sampled
         images. The interpolation is performed on the latent input space of the
         generator.
 
         Inputs:
-            batch_size          - Number of sentences to translate.
+            batch_size - Number of sentences to translate.
         Outputs:
             x - Generated images of shape [B,interpolation_steps+2,C,H,W]
         """
@@ -156,7 +159,10 @@ class BiGRU(pl.LightningModule):
         total_attn_mass_imp = 0.0
         generated_lines = []
 
-        for src, src_len, _, _, _ in tqdm(sentences):
+        print(len(samples))
+
+        for src, src_len, _, _, _ in tqdm(samples):
+            print('before permute ', src.shape)
             # create tensors here...
             src = torch.tensor(src).type(long_type).permute(1, 0)
             # trg = torch.tensor(trg).type(long_type).permute(1, 0)

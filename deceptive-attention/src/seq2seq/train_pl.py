@@ -30,7 +30,7 @@ EOS_IDX = utils.EOS_token
 
 class TranslationCallback(pl.Callback):
 
-    def __init__(self, sentences, out_path, every_n_epochs=10, save_to_disk=False):
+    def __init__(self, samples, out_path, every_n_epochs=10, save_to_disk=False):
         """
         Callback for translating sentences to TensorBoard and/or save them to disk every N epochs across training.
         Inputs:
@@ -39,7 +39,7 @@ class TranslationCallback(pl.Callback):
             save_to_disk        - If True, the samples should be saved to disk as well.
         """
         super().__init__()
-        self.sentences = sentences
+        self.samples = samples
         self.every_n_epochs = every_n_epochs
         self.save_to_disk = save_to_disk
         self.out_path = out_path
@@ -64,7 +64,7 @@ class TranslationCallback(pl.Callback):
                           and saving of the files.
         """
 
-        translations = pl_module.translate(self.sentences)
+        translations = pl_module.translate(self.samples)
         bleu_score = bleu_score_corpus(self.sentences, translations, TRG_LANG) * 100
         trainer.logger.experiment.add_scalar("bleu_score", bleu_score, global_step=epoch)
 
@@ -88,24 +88,22 @@ def train_gru(parameters):
 
     task = parameters.task
 
-    print('Initializing data module')
+    print('Initializing data module ...')
 
     data_module = SentenceDataModule(task=task,
                                      batch_size=parameters.batch_size,
                                      num_train=parameters.num_train,
                                      debug=parameters.debug)
-
-    print('Initialized data module')
+    data_module.setup()
 
     # Create a PyTorch Lightning trainer with the generation callback
 
-    callbacks = []
+    translation_callback = None
     if task == 'en-de':
-        print('Creating translation callback.')
+        print('Creating translation callback ...')
         translation_callback = TranslationCallback(data_module.test.samples,
                                                    out_path=get_out_path(parameters),
                                                    save_to_disk=True)
-        callbacks = [translation_callback]
 
     tb_logger = pl_loggers.TensorBoardLogger('logs/')
     trainer = Trainer(default_root_dir=LOG_PATH,
@@ -113,7 +111,7 @@ def train_gru(parameters):
                       checkpoint_callback=ModelCheckpoint(save_weights_only=True),
                       gpus=1 if torch.cuda.is_available() else 0,
                       max_epochs=parameters.epochs,
-                      callbacks=callbacks,
+                      callbacks=[translation_callback],
                       progress_bar_refresh_rate=1)
 
     # Optional logging argument that we don't need
@@ -137,13 +135,15 @@ def train_gru(parameters):
                   coeff=parameters.loss_coeff,
                   decode_with_no_attention=parameters.no_attn_inference)
 
-    print('Created model. Fitting model... ')
+    print('Fitting model ...')
 
     # Training
     # gen_callback.sample_and_save(trainer, model, epoch=0)  # Initial sample
     trainer.fit(model, data_module)
 
-    # translation_callback.generate(trainer, model, epoch=parameters.epochs)
+    if translation_callback is not None:
+        print('Generate final translations.')
+        translation_callback.generate(trainer, model, epoch=parameters.epochs)
 
     return model
 

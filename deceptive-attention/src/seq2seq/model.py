@@ -87,9 +87,10 @@ class BiGRU(pl.LightningModule):
         src, src_len, trg, trg_len, alignment = batch
 
         # create tensors here...
-        src = torch.tensor(src).type(long_type).permute(1, 0)
-        trg = torch.tensor(trg).type(long_type).permute(1, 0)
-        alignment = torch.tensor(alignment).type(float_type).permute(1, 0, 2)
+        # src.clone().detach()
+        src = src.clone().detach().type(long_type).permute(1, 0)
+        trg = trg.clone().detach().type(long_type).permute(1, 0)
+        alignment = alignment.clone().detach().type(float_type).permute(1, 0, 2)
         # alignment is not trg_len x batch_size x src_len
 
         # print (f"source shape {src.shape}")

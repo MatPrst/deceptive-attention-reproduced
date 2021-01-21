@@ -86,20 +86,26 @@ def train_gru(parameters):
     os.makedirs(DATA_MODELS_PATH, exist_ok=True)
     os.makedirs(DATA_VOCAB_PATH, exist_ok=True)
 
-    data_module = SentenceDataModule(task=parameters.task,
+    task = parameters.task
+    num_train = parameters.num_train
+
+    data_module = SentenceDataModule(task=task,
                                      batch_size=parameters.batch_size,
-                                     num_train=parameters.num_train,
+                                     num_train=num_train,
                                      debug=parameters.debug)
+
+    print('Initialized data module')
 
     # Create a PyTorch Lightning trainer with the generation callback
 
     suffix = 'suff'
-    out_path = f"{DATA_VOCAB_PATH}{parameters.task}{suffix}_seed={str(parameters.seed)}_coeff={str(parameters.loss_coeff)}_num-train={str(parameters.num_train)}"
+    out_path = f"{DATA_VOCAB_PATH}{task}{suffix}_seed={str(parameters.seed)}_coeff={str(parameters.loss_coeff)}_num-train={str(num_train)}"
 
-    translation_callback = TranslationCallback(data_module.test.samples, out_path=out_path, save_to_disk=True)
-    callbacks = [translation_callback]
-
-    # callbacks = []
+    callbacks = []
+    if task == 'en_de':
+        print('Creating translation callback.')
+        translation_callback = TranslationCallback(data_module.test.samples, out_path=out_path, save_to_disk=True)
+        callbacks = [translation_callback]
 
     tb_logger = pl_loggers.TensorBoardLogger('logs/')
     trainer = Trainer(default_root_dir=LOG_PATH,
@@ -131,11 +137,13 @@ def train_gru(parameters):
                   coeff=parameters.loss_coeff,
                   decode_with_no_attention=parameters.no_attn_inference)
 
+    print('Created model. Fitting model... ')
+
     # Training
     # gen_callback.sample_and_save(trainer, model, epoch=0)  # Initial sample
     trainer.fit(model, data_module)
 
-    translation_callback.generate(trainer, model, epoch=parameters.epochs)
+    # translation_callback.generate(trainer, model, epoch=parameters.epochs)
 
     return model
 

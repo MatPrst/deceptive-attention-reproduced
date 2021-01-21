@@ -7,9 +7,6 @@ from transformers import AutoTokenizer
 import numpy as np
 import sys
 
-# #TODO: implement Dataset object for SST task
-
-
 def compute_m(sentence_ids, impermissible_ids):
     """
     This function computes the masking vector m, as used to compute the penalty R
@@ -72,11 +69,89 @@ def compute_M(sentence_ids, impermissible_ids):
 
     return mask_matrix
 
+class SSTWikiDataset(Dataset):
+    """
+    This class loads the desired data split for the Pronoun Classification dataset
+    """
+
+    def __init__(self, dataset, max_length=180, anonymization=False):
+        """
+        Args:
+
+        """
+        self.path = './data/sst-wiki/' + dataset + '.txt'
+        self.text = read_csv(self.path, sep="\t", header=None)
+        self.block = read_csv(self.path+'.block', sep="\t", header=None)
+
+        self.anonymization = anonymization
+        self.tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.text)
+
+    def __getitem__(self, idx):
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+
+        label, sentences = self.text.iloc[idx]
+
+        # the 'blocks' variable is a binary Series, which serves
+        # to indicate where the review ends and where the random wiki sentence begins
+        # we use this to determine where to separate one from the other.
+        blocks = self.block.iloc[idx].str.split(' ')
+        blocks = [blocks[i] for i in range(len(blocks))][0]
+
+        # split review from wiki sentence
+        impermissible = ' '.join(sentences.split(' ')[:(blocks.index('0'))])
+        impermissible_ids = self.tokenizer(text=impermissible, return_tensors='np')['input_ids'][0][1:-1]
+
+        # if we anonymize, we remove the impermissible words (the review) from each sentence altogether
+        # (this should lead to an accuracy equivalent to random guessing)
+        if self.anonymization:
+            sentence = ' '.join(sentences.split(' ')[blocks.index('0'):])
+
+        # if we don't anonymize, the sentence consists of both (1) the review & (2) the random wiki sentence
+        else:
+            sentence = sentences
+
+        print(sentence)
+
+        # tokenize sentence and convert to sequence of ids
+        tokenized = self.tokenizer.encode_plus(
+            sentence,
+            add_special_tokens=True,
+            max_length=self.max_length,
+            padding='max_length',
+            return_attention_mask=True,
+            return_tensors='np',
+            truncation=True
+        )
+
+        sentence = tokenized['input_ids'][0]
+        attention_mask = tokenized['attention_mask'][0]
+
+        # compute vector mask m for each sentence
+        mask_vector = compute_m(sentence, impermissible_ids)
+
+        # compute matrix mask M for each sentence
+        mask_matrix = compute_M(sentence, impermissible_ids)
+
+        # convert np arrays to tensors
+        sentence = torch.from_numpy(sentence)
+        attention_mask = torch.from_numpy(attention_mask)
+        mask_vector = torch.from_numpy(mask_vector)
+        mask_matrix = torch.from_numpy(mask_matrix).float()
+
+        # return sample dict with sentence, associated label, and one-hot mask_vectors m
+        sample = {'sentences': sentence, 'attention_masks': attention_mask,
+                  'labels': label, 'mask_vectors': mask_vector, 'mask_matrices': mask_matrix}
+        return sample
+
 class PronounDataset(Dataset):
     """
     This class loads the desired data split for the Pronoun Classification dataset
     """
-    #TODO: downsample minority classes?
 
     def __init__(self, dataset, max_length=180, anonymization=False):
         """
@@ -190,7 +265,6 @@ class OccupationDataset(Dataset):
             truncation=True
         )
 
-
         sentence = tokenized['input_ids'][0]
         attention_mask = tokenized['attention_mask'][0]
 
@@ -229,17 +303,23 @@ class GenericDataModule(pl.LightningDataModule):
             self.train = OccupationDataset(dataset='train', max_length=self.max_length, anonymization=self.anonymization)
             self.val = OccupationDataset(dataset='dev', max_length=self.max_length,  anonymization=self.anonymization)
             self.test = OccupationDataset(dataset='test', max_length=self.max_length,  anonymization=self.anonymization)
+
         if self.task == 'pronoun':
             self.train = PronounDataset(dataset='train', max_length=self.max_length, anonymization=self.anonymization)
             self.val = PronounDataset(dataset='dev', max_length=self.max_length,  anonymization=self.anonymization)
             self.test = PronounDataset(dataset='test', max_length=self.max_length,  anonymization=self.anonymization)
 
+        if self.task == 'sstwiki':
+            self.train = SSTWikiDataset(dataset='train', max_length=self.max_length, anonymization=self.anonymization)
+            self.val = SSTWikiDataset(dataset='dev', max_length=self.max_length, anonymization=self.anonymization)
+            self.test = SSTWikiDataset(dataset='test', max_length=self.max_length, anonymization=self.anonymization)
+
     def train_dataloader(self):
-        return DataLoader(self.train, batch_size=self.batch_size, num_workers=self.num_workers)
+        return DataLoader(self.train, shuffle=True, batch_size=self.batch_size, num_workers=self.num_workers)
 
     def val_dataloader(self):
-        return DataLoader(self.val, batch_size=self.batch_size, num_workers=self.num_workers)
+        return DataLoader(self.val, shuffle=False, batch_size=self.batch_size, num_workers=self.num_workers)
 
     def test_dataloader(self):
-        return DataLoader(self.test, batch_size=self.batch_size, num_workers=self.num_workers)
+        return DataLoader(self.test, shuffle=False, batch_size=self.batch_size, num_workers=self.num_workers)
 

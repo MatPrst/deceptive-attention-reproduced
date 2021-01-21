@@ -79,16 +79,16 @@ def bleu_score_corpus(references, candidates):
 
     assert len(candidates) == len(references)
 
-    candidate_sentences = [candidate.split() for candidate in candidates]
-    target_sentences = [[reference] for reference in references]
+    # candidate_sentences = [candidate.split() for candidate in candidates]
+    # target_sentences = [[reference] for reference in references]
 
-    for i in range(len(candidate_sentences[:10])):
-        print('candidate ', candidate_sentences[i])
-        print('reference ', target_sentences[i])
+    for i in range(len(candidates[:10])):
+        print('candidate ', candidates[i])
+        print('reference ', references[i])
         print('\n')
 
     # Expected structure by NLTK
     # target Sentences: [[...], [...]]
     # candidate Sentences: [..., ...]
 
-    return nltk.translate.bleu_score.corpus_bleu(references, candidate_sentences)
+    return nltk.translate.bleu_score.corpus_bleu(references, candidates)

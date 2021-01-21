@@ -65,7 +65,7 @@ class TranslationCallback(pl.Callback):
         """
 
         translations = pl_module.translate(self.samples)
-        bleu_score = bleu_score_corpus(self.sentences, translations, TRG_LANG) * 100
+        bleu_score = bleu_score_corpus(self.samples, translations, TRG_LANG) * 100
         trainer.logger.experiment.add_scalar("bleu_score", bleu_score, global_step=epoch)
 
         fw = open(f"{self.out_path}.test.out", 'w')
@@ -138,7 +138,11 @@ def train_gru(parameters):
     print('Fitting model ...')
 
     # Training
-    # gen_callback.sample_and_save(trainer, model, epoch=0)  # Initial sample
+
+    if translation_callback is not None:
+        print('Generate final translations.')
+        translation_callback.generate(trainer, model, epoch=parameters.epochs)
+
     trainer.fit(model, data_module)
 
     if translation_callback is not None:

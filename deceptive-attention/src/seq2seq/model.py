@@ -1,11 +1,11 @@
 import random
 
+import numpy as np
 import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
 from torch import nn, optim
 from tqdm import tqdm
-import numpy as np
 
 import utils
 from batch_utils import TRG_LANG
@@ -88,8 +88,6 @@ class BiGRU(pl.LightningModule):
         src, src_len, trg, trg_len, alignment = batch
 
         # create tensors here...
-        # src.clone().detach()
-        print('before permute ', src.shape)
         src = src.clone().detach().type(long_type).permute(1, 0)
         trg = trg.clone().detach().type(long_type).permute(1, 0)
         alignment = alignment.clone().detach().type(float_type).permute(1, 0, 2)
@@ -163,7 +161,7 @@ class BiGRU(pl.LightningModule):
         print(len(samples))
 
         for src, src_len, _, _, _ in tqdm(samples):
-            
+
             if len(src.shape) != 3:
                 src = np.expand_dims(src, axis=0)
 

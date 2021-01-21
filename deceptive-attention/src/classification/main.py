@@ -187,6 +187,13 @@ def read_dataset(data_file, block_words=None, block_file=None, attn_file=None, c
         elif block_file is not None:
             block_ids = [int(i) for i in block_lines[idx].strip().split()]
 
+            # in the case of sst-wiki anonymizing means removing
+            if TO_ANON and TASK_NAME == 'sst-wiki':
+                sst_or_wiki = map(int, block_lines[idx].strip().split())
+
+                words = [word for word, block in zip(words, sst_or_wiki) if block == 0] #select only wiki words
+                block_ids = [i for i in block_ids if i == 0]
+
         if attn_file is not None:
             attn_wts = [float(i) for i in attn_lines[idx].strip().split()]
 

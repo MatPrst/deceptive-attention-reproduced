@@ -140,8 +140,8 @@ def train_gru(parameters):
     # Training
 
     if translation_callback is not None:
-        print('Generate final translations.')
-        translation_callback.generate(trainer, model, epoch=parameters.epochs)
+        print('Generate initial translations.')
+        translation_callback.generate(trainer, model, epoch=0)
 
     trainer.fit(model, data_module)
 

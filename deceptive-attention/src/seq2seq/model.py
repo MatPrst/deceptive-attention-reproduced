@@ -5,6 +5,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn, optim
 from tqdm import tqdm
+import numpy as np
 
 import utils
 from batch_utils import TRG_LANG
@@ -162,7 +163,10 @@ class BiGRU(pl.LightningModule):
         print(len(samples))
 
         for src, src_len, _, _, _ in tqdm(samples):
-            print('before permute ', src.shape)
+            
+            if len(src.shape) != 3:
+                src = np.expand_dims(src, axis=0)
+
             # create tensors here...
             src = torch.tensor(src).type(long_type).permute(1, 0)
             # trg = torch.tensor(trg).type(long_type).permute(1, 0)

@@ -7,13 +7,15 @@ import random
 import time
 from time import sleep
 from tabulate import tabulate
+import pickle
+import os
 
 import torch
 import torch.nn as nn
-from models import EmbAttModel, BiLSTMAttModel, BiLSTMModel
-import pickle
+from torch.utils.tensorboard import SummaryWriter
 
 import util
+from models import EmbAttModel, BiLSTMAttModel, BiLSTMModel
 from log_utils import setup_logger
 
 
@@ -55,6 +57,9 @@ parser.add_argument('--top', dest='top', type=int, default=3,
 parser.add_argument('--seed', dest='seed', type=int, default=1,
         help = 'set random seed, defualt = 1')
 
+parser.add_argument('--tensorboard_log', dest='tensorboard_log', default=False, action='store_true')
+
+
 # flags specifying whether to use the block and attn file or not
 parser.add_argument('--use-attn-file', dest='use_attn_file', action='store_true')
 
@@ -84,6 +89,7 @@ params = vars(parser.parse_args())
 
 # useful constants
 SEED = params['seed']
+TENSORBOARD = params['tensorboard_log']
 LOG_PATH = "logs/"
 
 # user specified constants
@@ -96,6 +102,7 @@ EMB_SIZE = params['emb_size']
 HID_SIZE = params['hid_size']
 EPSILON = 1e-12
 TO_ANON = params['anon']
+print(TO_ANON)
 TO_DUMP_ATTN = params['dump_attn']
 BLOCK_TOP = params['top']
 BLOCK_WORDS = params['block_words']
@@ -167,6 +174,7 @@ def read_dataset(data_file, block_words=None, block_file=None, attn_file=None, c
 
     for idx, data_line in enumerate(data_lines):
         tag, words = data_line.strip().lower().split("\t")
+
         if TO_ANON:
             words = util.anonymize(words)
 
@@ -178,6 +186,13 @@ def read_dataset(data_file, block_words=None, block_file=None, attn_file=None, c
             block_ids = [1 if i in block_words else 0 for i in words]
         elif block_file is not None:
             block_ids = [int(i) for i in block_lines[idx].strip().split()]
+
+            # in the case of sst-wiki anonymizing means removing
+            if TO_ANON and TASK_NAME == 'sst-wiki':
+                sst_or_wiki = map(int, block_lines[idx].strip().split())
+
+                words = [word for word, block in zip(words, sst_or_wiki) if block == 0] #select only wiki words
+                block_ids = [i for i in block_ids if i == 0]
 
         if attn_file is not None:
             attn_wts = [float(i) for i in attn_lines[idx].strip().split()]
@@ -448,6 +463,10 @@ _, _ = evaluate(test, 0, name='test', attn_stats=True,
                         num_vis=0)
 
 
+writer = None
+if TENSORBOARD:
+    writer = SummaryWriter(os.path.join(LOG_PATH, "tensorboard"))
+
 logger.info("starting to train")
 
 
@@ -506,6 +525,8 @@ for ITER in range(1, NUM_EPOCHS+1):
         loss.backward()
         optimizer.step()
 
+    epoch_duration = time.time() - start
+    
     logger.info("iter %r: train loss=%.4f, ce_loss=%.4f, entropy_loss=%.4f,"
                 "hammer_loss=%.4f, kld_loss==%.4f, time=%.2fs" % (
                 ITER,
@@ -514,12 +535,25 @@ for ITER in range(1, NUM_EPOCHS+1):
                 train_entropy_loss/len(train),
                 train_hammer_loss/len(train),
                 train_kld_loss/len(train),
-                time.time()-start))
+                epoch_duration))
 
-    _, _  = evaluate(train, ITER, name='train')
+    train_acc, train_loss  = evaluate(train, ITER, name='train')
     dev_acc, dev_loss  = evaluate(dev, ITER, name='dev', attn_stats=True)
-    test_acc, test_loss = evaluate(test, ITER, name='test', attn_stats=True,
-                        num_vis=NUM_VIS)
+    test_acc, test_loss = evaluate(test, ITER, name='test', attn_stats=True, num_vis=NUM_VIS)
+
+    if writer is not None:
+        # Training metrics
+        writer.add_scalar("Loss/train", train_loss/len(train), ITER)
+        writer.add_scalar("CE_loss/train", train_ce_loss/len(train), ITER)
+        writer.add_scalar("Entropy_loss/train", train_entropy_loss/len(train), ITER)
+        writer.add_scalar("Hammer_loss/train", train_hammer_loss/len(train), ITER)
+        writer.add_scalar("KLD_loss/train", train_kld_loss/len(train), ITER)
+        writer.add_scalar("Duration", epoch_duration, ITER)
+
+        # Evaluation metrics
+        writer.add_scalar("Accuracy/train", train_acc, ITER)
+        writer.add_scalar("Accuracy/dev", dev_acc, ITER)
+        writer.add_scalar("Accuracy/test", test_acc, ITER)
 
     if ((not USE_LOSS) and dev_acc > best_dev_accuracy) or (USE_LOSS and dev_loss < best_dev_loss):
 

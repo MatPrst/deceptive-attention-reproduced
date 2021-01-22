@@ -7,17 +7,10 @@ from torch import nn
 
 PAD_token = 0
 
-# set seeds
-SEED = 123
-random.seed(SEED)
-np.random.seed(SEED)
-torch.manual_seed(SEED)
-
 long_type = torch.LongTensor
 float_type = torch.FloatTensor
-is_cuda = torch.cuda.is_available()
 
-if is_cuda:
+if torch.cuda.is_available():
     long_type = torch.cuda.LongTensor
     float_type = torch.cuda.FloatTensor
 

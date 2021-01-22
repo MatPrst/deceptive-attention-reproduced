@@ -1,51 +1,62 @@
 import argparse
 import math
+import os
 import random
 import time
 
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 import models
 import utils
+from batch_utils import *
 from gen_utils import *
+from log_utils import *
 from models import Attention, Seq2Seq, Encoder, Decoder, DecoderNoAttn, DecoderUniform
-from utils import Language
+from utils import *
 
-# import log
+# --------------- non-determinism issues with RNN methods ----------------- #
+# https://pytorch.org/docs/stable/generated/torch.nn.LSTM.html#torch.nn.LSTM
+# CUDA 10.1
+# CUDA_LAUNCH_BLOCKING = 1
+
+# CUDA 10.2
+# CUBLAS_WORKSPACE_CONFIG =:16:8
 
 # --------------- parse the flags etc ----------------- #
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-parser.add_argument('--task', dest='task', default='copy',
-                    choices=('copy', 'rev', 'binary-flip', 'en-hi', 'en-de'),
+parser.add_argument('--task', dest='task', default='en-de',
+                    choices=('copy', 'reverse-copy', 'binary-flip', 'en-hi', 'en-de'),
                     help='select the task you want to run on')
 
 parser.add_argument('--debug', dest='debug', action='store_true')
 parser.add_argument('--loss-coef', dest='loss_coeff', type=float, default=0.0)
 parser.add_argument('--epochs', dest='epochs', type=int, default=5)
 parser.add_argument('--seed', dest='seed', type=int, default=1234)
-parser.add_argument('--uniform', dest='uniform', action='store_true')
-parser.add_argument('--no-attn', dest='no_attn', action='store_true')
+
+parser.add_argument('--attention', dest='attention', type=str, default='dot-product')
+
 parser.add_argument('--batch-size', dest='batch_size', type=int, default=128)
 parser.add_argument('--num-train', dest='num_train', type=int, default=1000000)
 parser.add_argument('--decode-with-no-attn', dest='no_attn_inference', action='store_true')
+
+parser.add_argument('--tensorboard_log', dest='tensorboard_log', action='store_true')
 
 params = vars(parser.parse_args())
 TASK = params['task']
 DEBUG = params['debug']
 COEFF = params['loss_coeff']
-NUM_EPOCHS = params['epochs']
-UNIFORM = params['uniform']
-NO_ATTN = params['no_attn']
-NUM_TRAIN = params['num_train']
-DECODE_WITH_NO_ATTN = params['no_attn_inference']
+EPOCHS = params['epochs']
+TENSORBOARD_LOG = params['tensorboard_log']
 
-INPUT_VOCAB = 10000
-OUTPUT_VOCAB = 10000
+LOG_PATH = "logs/"
+DATA_PATH = "data/"
+DATA_VOCAB_PATH = "data/vocab/"
+DATA_MODELS_PATH = "data/models/"
 
 long_type = torch.LongTensor
 float_type = torch.FloatTensor
@@ -55,33 +66,65 @@ if use_cuda:
     long_type = torch.cuda.LongTensor
     float_type = torch.cuda.FloatTensor
 
+DEVICE = torch.device('cuda' if use_cuda else 'cpu')
+
+ENC_EMB_DIM = 256
+DEC_EMB_DIM = 256
+ENC_HID_DIM = 512
+DEC_HID_DIM = 512
+ENC_DROPOUT = 0.5
+DEC_DROPOUT = 0.5
+PAD_IDX = utils.PAD_token
+SOS_IDX = utils.SOS_token
+EOS_IDX = utils.EOS_token
+
+# UNIFORM = params['uniform']
+# NO_ATTN = params['no_attn']
+
+# can have values 'dot-product', 'uniform', or 'no-attention'
+ATTENTION = params['attention']
+
+NUM_TRAIN = params['num_train']
+DECODE_WITH_NO_ATTN = params['no_attn_inference']
+
+# INPUT_VOCAB = 10000
+# OUTPUT_VOCAB = 10000
+
+SRC_LANG = Language('src')
+TRG_LANG = Language('trg')
+
+SPLITS = ['train', 'dev', 'test']
+
+SEED = params['seed']
+BATCH_SIZE = params['batch_size']
+
 
 # The following function is not being used right now, and is deprecated.
-def generate_mask(attn_shape, list_src_lens=None):
+def generate_mask(attn_shape, task, list_src_lens=None):
     trg_len, batch_size, src_len = attn_shape
 
     mask = torch.zeros(attn_shape).type(float_type)
     min_seq_len = min(trg_len, src_len)
 
-    if TASK == 'copy':
+    if task == 'copy':
         diag_items = torch.arange(min_seq_len)
         mask[diag_items, :, diag_items] = 1.0
-    elif TASK == 'rev':
+    elif task == 'rev':
         assert list_src_lens is not None
         for b in range(batch_size):
             i = torch.arange(min_seq_len)
             j = torch.tensor([max(0, list_src_lens[b] - i - 1) for i in range(min_seq_len)])
             mask[i, b, j] = 1.0
-    elif TASK == 'binary-flip':
+    elif task == 'binary-flip':
         last = min_seq_len if min_seq_len % 2 == 1 else min_seq_len - 1
         i = torch.tensor([i for i in range(1, last)])
         j = torch.tensor([i - 1 if i % 2 == 0 else i + 1 for i in range(1, last)])
         mask[i, :, j] = 1.0
-    elif TASK == 'en-hi':
-        # english hindi, nothing as of now... will have a billingual dict later.
+    elif task == 'en-hi':
+        # english hindi, nothing as of now... will have a bilingual dict later.
         pass
     else:
-        raise ValueError("TASK can be one of copy, rev, binary-flip")
+        raise ValueError("task can be one of copy, reverse-copy, binary-flip")
 
         # make sure there are no impermissible tokens for first target
     mask[0, :, :] = 0.0  # the first target is free...
@@ -91,7 +134,7 @@ def generate_mask(attn_shape, list_src_lens=None):
     return mask
 
 
-def train(model, data, optimizer, criterion, clip):
+def train_model(model, data, optimizer, criterion, coeff):
     model.train()
 
     epoch_loss = 0
@@ -105,7 +148,7 @@ def train(model, data, optimizer, criterion, clip):
         src = torch.tensor(src).type(long_type).permute(1, 0)
         trg = torch.tensor(trg).type(long_type).permute(1, 0)
         alignment = torch.tensor(alignment).type(float_type).permute(1, 0, 2)
-        # algiment is not trg_len x batch_size x src_len
+        # alignment is not trg_len x batch_size x src_len
 
         optimizer.zero_grad()
 
@@ -141,11 +184,11 @@ def train(model, data, optimizer, criterion, clip):
         # total_src += non_pad_tokens_src # non pad tokens src
         total_correct += torch.sum((trg == predictions) * trg_non_pad_indices).item()
 
-        loss = criterion(output, trg) - COEFF * torch.log(1 - attn_mass_imp / non_pad_tokens_trg)
+        loss = criterion(output, trg) - coeff * torch.log(1 - attn_mass_imp / non_pad_tokens_trg)
 
         loss.backward()
 
-        torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
 
         optimizer.step()
 
@@ -171,7 +214,7 @@ def evaluate(model, data, criterion):
             alignment = torch.tensor(alignment).type(float_type).permute(1, 0, 2)
             # alignment is not trg_len x batch_size x src_len
 
-            # output, attention = model(src, src_len, None, 0) #turn off teacher forcing
+            # output, attention = model(src, src_len, None, 0) # turn off teacher forcing
             output, attention = model(src, src_len, trg, 0)  # turn off teacher forcing
             # NOTE: it is not a bug to not count extra produce from the model, beyond target len
 
@@ -233,20 +276,22 @@ def generate(model, data):
 
             predictions = torch.argmax(output, dim=1)  # long tensor
             # shape [trg len - 1]
-            generated_tokens = [trg_lang.get_word(w) for w in predictions.cpu().numpy()]
+            generated_tokens = [TRG_LANG.get_word(w) for w in predictions.cpu().numpy()]
 
             generated_lines.append(" ".join(generated_tokens))
 
     return generated_lines
 
 
-SEED = params['seed']
-BATCH_SIZE = params['batch_size']
-
-random.seed(SEED)
-torch.manual_seed(SEED)
-torch.backends.cudnn.deterministic = True
-models.set_seed(SEED)
+def set_seed(seed):
+    random.seed(seed)
+    torch.manual_seed(seed)
+    if use_cuda:
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+    models.set_seed(seed)
 
 
 def init_weights(m):
@@ -261,228 +306,198 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-src_lang = Language('src')
-trg_lang = Language('trg')
+def initialize_model(attention, encoder_emb_dim, decoder_emb_dim, encoder_hid_dim, decoder_hid_dim, logger):
+    input_dim = SRC_LANG.get_vocab_size()
+    output_dim = TRG_LANG.get_vocab_size()
+    logger.info(f"Input vocabulary size {input_dim} and output vocabulary size {output_dim}.")
 
-splits = ['train', 'dev', 'test']
-sentences = []
+    suffix = ""
 
-for sp in splits:
-    src_filename = "./data/" + sp + "." + TASK + ".src"
-    trg_filename = "./data/" + sp + "." + TASK + ".trg"
+    attn = Attention(encoder_hid_dim, decoder_hid_dim)
+    enc = Encoder(input_dim, encoder_emb_dim, encoder_hid_dim, decoder_hid_dim, ENC_DROPOUT)
 
-    src_sentences = open(src_filename).readlines()
-    trg_sentences = open(trg_filename).readlines()
-
-    alignment_filename = "./data/" + sp + "." + TASK + ".align"
-
-    alignment_sentences = open(alignment_filename).readlines()
-
-    if DEBUG:  # small scale
-        src_sentences = src_sentences[:int(1e5)]
-        trg_sentences = trg_sentences[:int(1e5)]
-        alignment_sentences = alignment_sentences[: int(1e5)]
-
-    if sp == 'train':
-        src_sentences = src_sentences[:NUM_TRAIN]
-        trg_sentences = trg_sentences[:NUM_TRAIN]
-        alignment_sentences = alignment_sentences[:NUM_TRAIN]
-
-    sentences.append([src_sentences, trg_sentences, alignment_sentences])
-
-train_sents = sentences[0]
-
-'''
-train_src_sents = train_sents[0]
-train_trg_sents = train_sents[1]
-train_alignments = train_sents[2]
-top_src_words = compute_frequencies(train_src_sents, INPUT_VOCAB)
-top_trg_words = compute_frequencies(train_trg_sents, OUTPUT_VOCAB)
-
-train_src_sents = unkify_lines(train_src_sents, top_src_words)
-train_trg_sents = unkify_lines(train_trg_sents, top_trg_words)
-train_sents = train_src_sents, train_trg_sents
-'''
-
-dev_sentences = sentences[1]
-test_sentences = sentences[2]
-
-
-def get_batches(src_sentences, trg_sentences, alignments, batch_size):
-    # parallel should be at least equal len
-    assert (len(src_sentences) == len(trg_sentences))
-
-    for b_idx in range(0, len(src_sentences), batch_size):
-
-        # get the slice
-        src_sample = src_sentences[b_idx: b_idx + batch_size]
-        trg_sample = trg_sentences[b_idx: b_idx + batch_size]
-        align_sample = alignments[b_idx: b_idx + batch_size]
-
-        # represent them
-        src_sample = [src_lang.get_sent_rep(s) for s in src_sample]
-        trg_sample = [trg_lang.get_sent_rep(s) for s in trg_sample]
-
-        # sort by decreasing source len
-        sorted_ids = sorted(enumerate(src_sample), reverse=True, key=lambda x: len(x[1]))
-        src_sample = [src_sample[i] for i, v in sorted_ids]
-        trg_sample = [trg_sample[i] for i, v in sorted_ids]
-        align_sample = [align_sample[i] for i, v in sorted_ids]
-
-        src_len = [len(s) for s in src_sample]
-        trg_len = [len(t) for t in trg_sample]
-
-        # largeset seq len 
-        max_src_len = max(src_len)
-        max_trg_len = max(trg_len)
-
-        # pad the extra indices 
-        src_sample = src_lang.pad_sequences(src_sample, max_src_len)
-        trg_sample = trg_lang.pad_sequences(trg_sample, max_trg_len)
-
-        # generated masks
-        aligned_outputs = []
-
-        for alignment in align_sample:
-            # print (alignment)
-            current_alignment = np.zeros([max_trg_len, max_src_len])
-
-            for pair in alignment.strip().split():
-                src_i, trg_j = pair.split("-")
-                src_i = min(int(src_i) + 1, max_src_len - 1)
-                trg_j = min(int(trg_j) + 1, max_trg_len - 1)
-                current_alignment[trg_j][src_i] = 1
-
-            aligned_outputs.append(current_alignment)
-
-        # numpy them
-        src_sample = np.array(src_sample, dtype=np.int64)
-        trg_sample = np.array(trg_sample, dtype=np.int64)
-        aligned_outputs = np.array(aligned_outputs)
-        # align output is batch_size x max target_len x max_src_len
-
-        assert (src_sample.shape[1] == max_src_len)
-
-        yield src_sample, src_len, trg_sample, trg_len, aligned_outputs
-
-
-train_batches = list(get_batches(train_sents[0], train_sents[1], train_sents[2], BATCH_SIZE))
-src_lang.stop_accepting_new_words()
-trg_lang.stop_accepting_new_words()
-dev_batches = list(get_batches(dev_sentences[0], dev_sentences[1], dev_sentences[2], BATCH_SIZE))
-test_batches = list(get_batches(test_sentences[0], test_sentences[1], test_sentences[2], BATCH_SIZE))
-
-# --------------------------------------------------------#
-# ------------------- define the model -------------------#
-# --------------------------------------------------------#
-INPUT_DIM = src_lang.get_vocab_size()
-OUTPUT_DIM = trg_lang.get_vocab_size()
-print(f"Input vocab {INPUT_DIM} and output vocab {OUTPUT_DIM}")
-ENC_EMB_DIM = 256
-DEC_EMB_DIM = 256
-ENC_HID_DIM = 512
-DEC_HID_DIM = 512
-ENC_DROPOUT = 0.5
-DEC_DROPOUT = 0.5
-PAD_IDX = utils.PAD_token
-SOS_IDX = utils.SOS_token
-EOS_IDX = utils.EOS_token
-SUFFIX = ""
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-attn = Attention(ENC_HID_DIM, DEC_HID_DIM)
-enc = Encoder(INPUT_DIM, ENC_EMB_DIM, ENC_HID_DIM, DEC_HID_DIM, ENC_DROPOUT)
-
-if UNIFORM:
-    dec = DecoderUniform(OUTPUT_DIM, DEC_EMB_DIM, ENC_HID_DIM, DEC_HID_DIM, DEC_DROPOUT, attn)
-    SUFFIX = "_uniform"
-elif NO_ATTN or DECODE_WITH_NO_ATTN:
-    dec = DecoderNoAttn(OUTPUT_DIM, DEC_EMB_DIM, ENC_HID_DIM, DEC_HID_DIM, DEC_DROPOUT, attn)
-    if NO_ATTN:
-        SUFFIX = "_no-attn"
-else:
-    dec = Decoder(OUTPUT_DIM, DEC_EMB_DIM, ENC_HID_DIM, DEC_HID_DIM, DEC_DROPOUT, attn)
-
-model = Seq2Seq(enc, dec, PAD_IDX, SOS_IDX, EOS_IDX, device).to(device)
-# init weights 
-model.apply(init_weights)
-# count the params 
-print(f'The model has {count_parameters(model):,} trainable parameters')
-optimizer = optim.Adam(model.parameters())
-criterion = nn.CrossEntropyLoss(ignore_index=PAD_IDX)
-# --------- end of model definition --------- #
-
-# NUM_EPOCHS = 5
-
-CLIP = 1
-
-best_valid_loss = float('inf')
-convergence_time = 0.0
-epochs_taken_to_converge = 0
-
-no_improvement_last_time = False
-
-for epoch in range(NUM_EPOCHS):
-
-    start_time = time.time()
-
-    train_loss, train_acc, train_attn_mass = train(model, train_batches,
-                                                   optimizer, criterion, CLIP)
-    valid_loss, val_acc, val_attn_mass = evaluate(model, dev_batches, criterion)
-
-    end_time = time.time()
-
-    epoch_mins, epoch_secs = epoch_time(start_time, end_time)
-
-    if valid_loss < best_valid_loss:
-        best_valid_loss = valid_loss
-        torch.save(model.state_dict(), 'data/models/model_' + TASK + SUFFIX + '_seed=' + str(SEED) + '_coeff='
-                   + str(COEFF) + '_num-train=' + str(NUM_TRAIN) + '.pt')
-        epochs_taken_to_converge = epoch + 1
-        convergence_time += (end_time - start_time)
-        no_improvement_last_time = False
+    if attention == 'uniform':
+        dec = DecoderUniform(output_dim, decoder_emb_dim, encoder_hid_dim, decoder_hid_dim, DEC_DROPOUT, attn)
+        suffix = "_uniform"
+    elif attention == 'no-attention' or DECODE_WITH_NO_ATTN:
+        dec = DecoderNoAttn(output_dim, decoder_emb_dim, encoder_hid_dim, decoder_hid_dim, DEC_DROPOUT, attn)
+        if attention == 'no-attention':
+            suffix = "_no-attn"
     else:
-        # no improvement this time
-        if no_improvement_last_time:
-            break
-        no_improvement_last_time = True
+        dec = Decoder(output_dim, decoder_emb_dim, encoder_hid_dim, decoder_hid_dim, DEC_DROPOUT, attn)
 
-    print(f'Epoch: {epoch + 1:02} | Time: {epoch_mins}m {epoch_secs}s')
-    print(f'\tTrain Loss: {train_loss:.3f} | Train Acc: {train_acc:0.2f} \
-        | Train Attn Mass: {train_attn_mass:0.2f} | Train PPL: {math.exp(train_loss):7.3f}')
-    print(f'\t Val. Loss: {valid_loss:.3f} |   Val Acc: {val_acc:0.2f} \
-        |  Val. Attn Mass: {val_attn_mass:0.2f} |  Val. PPL: {math.exp(valid_loss):7.3f}')
+    model = Seq2Seq(enc, dec, PAD_IDX, SOS_IDX, EOS_IDX, DEVICE).to(DEVICE)
 
-# load the best model and print stats:
-model.load_state_dict(torch.load('data/models/model_' + TASK + SUFFIX + '_seed=' + str(SEED) + '_coeff='
-                                 + str(COEFF) + '_num-train=' + str(NUM_TRAIN) + '.pt'))
+    # init weights
+    model.apply(init_weights)
 
-test_loss, test_acc, test_attn_mass = evaluate(model, test_batches, criterion)
-print(f'\t Test Loss: {test_loss:.3f} |  Test Acc: {test_acc:0.2f} \
-        |  Test Attn Mass: {test_attn_mass:0.2f} |  Test PPL: {math.exp(test_loss):7.3f}')
+    # count the params
+    logger.info(f'The model has {count_parameters(model):,} trainable parameters.\n')
 
-print(f"Final Test Accuracy ..........\t{test_acc:0.2f}")
-print(f"Final Test Attention Mass ....\t{test_attn_mass:0.2f}")
-print(f"Convergence time in seconds ..\t{convergence_time:0.2f}")
-print(f"Sample efficiency in epochs ..\t{epochs_taken_to_converge}")
+    optimizer = optim.Adam(model.parameters())
+    criterion = nn.CrossEntropyLoss(ignore_index=PAD_IDX)
 
-src_lang.save_vocab("data/vocab/" + TASK + SUFFIX + '_seed=' + str(SEED) \
-                    + '_coeff=' + str(COEFF) + '_num-train=' + str(NUM_TRAIN) + ".src.vocab")
-trg_lang.save_vocab("data/vocab/" + TASK + SUFFIX + '_seed=' + str(SEED) \
-                    + '_coeff=' + str(COEFF) + '_num-train=' + str(NUM_TRAIN) + ".trg.vocab")
+    return optimizer, criterion, model, suffix
 
-if TASK in ['en-hi', 'en-de']:
-    # generate the output to compute bleu scores as well...
-    print("generating the output translations from the model")
 
-    test_batches_single = list(get_batches(test_sentences[0], test_sentences[1], test_sentences[2], 1))
+def train(task=TASK,
+          epochs=EPOCHS,
+          coeff=COEFF,
+          seed=SEED,
+          batch_size=BATCH_SIZE,
+          attention=ATTENTION,
+          debug=DEBUG,
+          num_train=NUM_TRAIN,
+          encoder_emb_dim=ENC_EMB_DIM,
+          decoder_emb_dim=DEC_EMB_DIM,
+          encoder_hid_dim=ENC_HID_DIM,
+          decoder_hid_dim=DEC_HID_DIM,
+          tensorboard_log=TENSORBOARD_LOG):
+    set_seed(SEED)
+
+    writer = None
+    if tensorboard_log:
+        writer = SummaryWriter(LOG_PATH + 'tensorboard/')
+
+    logger = setup_logger(LOG_PATH, 'task=%s_coeff=%s_seed=%s' % (task, coeff, seed))
+
+    logger.info("Starting training..........")
+    logger.info(f'Configuration:\n epochs: {epochs}\n coeff: {coeff}\n seed: {seed}\n batch_size: ' +
+                f'{batch_size}\n attention: {attention}\n debug: {debug}\n num_train: {num_train}\n device: {DEVICE}\n '
+                f'task: {task}\n')
+
+    # load vocabulary if already present
+    src_vocab_path = DATA_PATH + task + '_coeff=' + str(coeff) + ".src.vocab"
+    trg_vocab_path = DATA_PATH + task + '_coeff=' + str(coeff) + ".trg.vocab"
+
+    if os.path.exists(src_vocab_path):
+        SRC_LANG.load_vocab(src_vocab_path)
+
+    if os.path.exists(trg_vocab_path):
+        TRG_LANG.load_vocab(trg_vocab_path)
+
+    sentences = initialize_sentences(task, debug, num_train, SPLITS)
+
+    train_batches, dev_batches, test_batches = get_batches_from_sentences(sentences, batch_size, SRC_LANG, TRG_LANG)
+
+    # setup the model
+    optimizer, criterion, model, suffix = initialize_model(attention, encoder_emb_dim, decoder_emb_dim, encoder_hid_dim,
+                                                           decoder_hid_dim, logger)
+
+    best_valid_loss = float('inf')
+    convergence_time = 0.0
+    epochs_taken_to_converge = 0
+
+    no_improvement_last_time = False
+
+    for epoch in range(epochs):
+
+        start_time = time.time()
+
+        train_loss, train_acc, train_attn_mass = train_model(model, train_batches, optimizer, criterion, coeff)
+        val_loss, val_acc, val_attn_mass = evaluate(model, dev_batches, criterion)
+
+        if writer is not None:
+            writer.add_scalar("Loss/train", train_loss, epoch)
+            writer.add_scalar("Accuracy/train", train_acc, epoch)
+            writer.add_scalar("AttentionMass/train", train_attn_mass, epoch)
+
+            # writer.add_hparams({"lr": "learning_rate", "bsize": batch_size, "task": task, "coeff": coeff, "seed": seed},
+            #                    {})
+            # {'accuracy': train_acc, 'loss': train_loss})
+
+            writer.add_scalar("Loss/valid", val_loss, epoch)
+            writer.add_scalar("Accuracy/valid", val_acc, epoch)
+            writer.add_scalar("AttentionMass/valid", val_attn_mass, epoch)
+
+        end_time = time.time()
+
+        epoch_minutes, epoch_secs = epoch_time(start_time, end_time)
+
+        if val_loss < best_valid_loss:
+            best_valid_loss = val_loss
+            torch.save(model.state_dict(),
+                       DATA_MODELS_PATH + 'model_' + task + suffix + '_seed=' + str(seed) + '_coeff='
+                       + str(coeff) + '_num-train=' + str(num_train) + '.pt')
+            epochs_taken_to_converge = epoch + 1
+            convergence_time += (end_time - start_time)
+            no_improvement_last_time = False
+        else:
+            # no improvement this time
+            if no_improvement_last_time:
+                break
+            no_improvement_last_time = True
+
+        logger.info(f'Epoch: {epoch + 1:02} | Time: {epoch_minutes}m {epoch_secs}s')
+        logger.info(f'\tTrain Loss: {train_loss:.3f} | Train Acc: {train_acc:0.2f} \
+            | Train Attn Mass: {train_attn_mass:0.2f} | Train PPL: {math.exp(train_loss):7.3f}')
+        logger.info(f'\t Val. Loss: {val_loss:.3f} |   Val Acc: {val_acc:0.2f} \
+            |  Val. Attn Mass: {val_attn_mass:0.2f} |  Val. PPL: {math.exp(val_loss):7.3f}')
+
+    # load the best model and print stats:
+    model.load_state_dict(torch.load(DATA_MODELS_PATH + 'model_' + task + suffix + '_seed=' + str(seed) + '_coeff='
+                                     + str(coeff) + '_num-train=' + str(num_train) + '.pt'))
+
+    test_loss, test_acc, test_attn_mass = evaluate(model, test_batches, criterion)
+    logger.info(f'\t Test Loss: {test_loss:.3f} |  Test Acc: {test_acc:0.2f} \
+            |  Test Attn Mass: {test_attn_mass:0.2f} |  Test PPL: {math.exp(test_loss):7.3f}')
+
+    logger.info(f"Final Test Accuracy ..........\t{test_acc:0.2f}")
+    logger.info(f"Final Test Attention Mass ....\t{test_attn_mass:0.2f}")
+    logger.info(f"Convergence time in seconds ..\t{convergence_time:0.2f}")
+    logger.info(f"Sample efficiency in epochs ..\t{epochs_taken_to_converge}")
+
+    out_path = f"{DATA_VOCAB_PATH}{task}{suffix}_seed={str(seed)}_coeff={str(coeff)}_num-train={str(num_train)}"
+    SRC_LANG.save_vocab(f"{out_path}.src.vocab")
+    TRG_LANG.save_vocab(f"{out_path}.trg.vocab")
+
+    if task in ['en-hi', 'en-de']:
+        # generate the output to compute bleu scores as well...
+        logger.info("Generating the output translations from the model.")
+
+        translations, bleu_score = generate_translations(model, sentences, logger)
+
+        logger.info(f"BLEU score ..........\t{bleu_score:0.2f}")
+        logger.info("[done] .... now dumping the translations.")
+
+        fw = open(f"{out_path}.test.out", 'w')
+        for line in translations:
+            fw.write(line.strip() + "\n")
+        fw.close()
+
+    if writer is not None:
+        writer.close()
+
+
+def generate_translations(model, sentences, logger):
+    test_sentences = sentences[2]
+    test_batches_single = list(get_batches(test_sentences, 1, SRC_LANG, TRG_LANG))
+
+    logger.info(f'batch single {str(test_batches_single)}')
+    logger.info(f'batch single length {str(len(test_batches_single))}')
+
     output_lines = generate(model, test_batches_single)
+    score = bleu_score_corpus(test_batches_single, output_lines, TRG_LANG)
 
-    print("[done] .... now dumping the translations")
+    return output_lines, score * 100  # report it in percentage
 
-    outfile = "data/" + TASK + SUFFIX + "_seed" + str(SEED) + '_coeff=' + str(COEFF) + '_num-train=' \
-              + str(NUM_TRAIN) + ".test.out"
-    fw = open(outfile, 'w')
-    for line in output_lines:
-        fw.write(line.strip() + "\n")
-    fw.close()
+
+def main():
+    # Create directories if not already existent
+
+    if not os.path.exists(LOG_PATH):
+        os.makedirs(LOG_PATH)
+
+    if not os.path.exists(DATA_PATH):
+        os.makedirs(DATA_PATH)
+
+    if not os.path.exists(DATA_MODELS_PATH):
+        os.makedirs(DATA_MODELS_PATH)
+
+    if not os.path.exists(DATA_VOCAB_PATH):
+        os.makedirs(DATA_VOCAB_PATH)
+
+    train()
+
+
+if __name__ == "__main__": main()

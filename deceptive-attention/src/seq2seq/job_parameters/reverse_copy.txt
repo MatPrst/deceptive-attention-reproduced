@@ -1,0 +1,6 @@
+--epochs 30 --task reverse-copy --seed 1 --loss-coef 0.0 
+--epochs 30 --task reverse-copy --seed 1 --loss-coef 0.1 
+--epochs 30 --task reverse-copy --seed 1 --loss-coef 1.0 
+--epochs 30 --task reverse-copy --seed 5 --loss-coef 0.0 
+--epochs 30 --task reverse-copy --seed 5 --loss-coef 0.1 
+--epochs 30 --task reverse-copy --seed 5 --loss-coef 1.0 

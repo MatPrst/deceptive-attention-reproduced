@@ -1,6 +1,5 @@
 import random
 
-import numpy as np
 import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
@@ -57,23 +56,30 @@ class BiGRU(pl.LightningModule):
 
         self.model = Seq2Seq(encoder, dec, pad_idx, sos_idx, eos_idx, DEVICE).to(DEVICE)
 
-        # TODO: init weights
-        # model.apply(init_weights)
+        # initialize all weights in this model
+        self.apply(self._init_weights)
 
-        # count the params
-        # logger.info(f'The model has {count_parameters(model):,} trainable parameters.\n')
+        # TODO: Maybe not needed as the line above will do already
+        self.model.apply(self._init_weights)
 
         self.loss_module = nn.CrossEntropyLoss(ignore_index=pad_idx)
 
-        self.total_attn_mass_imp = 0.0
-        self.total_trg = 0.0
-        self.total_correct = 0.0
-
         self.coefficient = coeff
+
+    @staticmethod
+    def _init_weights(m):
+        for name, param in m.named_parameters():
+            if 'weight' in name:
+                nn.init.normal_(param.data, mean=0, std=0.01)
+            else:
+                nn.init.constant_(param.data, 0)
+
+    def count_parameters(self):
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
     def configure_optimizers(self):
         optimizer = optim.AdamW(self.model.parameters())
-        return [optimizer], []
+        return optimizer
 
     def training_step(self, batch, batch_idx):
         """
@@ -82,32 +88,70 @@ class BiGRU(pl.LightningModule):
             batch_idx     - Index of the batch in the dataset (not needed here).
         """
 
-        src, src_len, trg, trg_len, alignment = batch
+        loss, attn_mass_imp, non_pad_tokens_trg, correct = self._compute_loss(batch, 'train')
 
+        train_accuracy = 100. * correct / non_pad_tokens_trg
+        train_attention_mass = 100. * attn_mass_imp / non_pad_tokens_trg
+
+        self.log("train_loss", loss, on_step=False, on_epoch=True)
+        self.log("train_accuracy", train_accuracy, on_step=False, on_epoch=True)
+        self.log("train_attention_mass", train_attention_mass, on_step=False, on_epoch=True)
+
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        loss, attn_mass_imp, non_pad_tokens_trg, correct = self._compute_loss(batch, 'val')
+
+        accuracy = 100. * correct / non_pad_tokens_trg
+        attention_mass = 100. * attn_mass_imp / non_pad_tokens_trg
+
+        self.log("val_loss", loss)
+        self.log("val_accuracy", accuracy)
+        self.log("val_attention_mass", attention_mass)
+
+    def test_step(self, batch, batch_idx):
+        loss, attn_mass_imp, non_pad_tokens_trg, correct = self._compute_loss(batch, 'test')
+
+        accuracy = 100. * correct / non_pad_tokens_trg
+        attention_mass = 100. * attn_mass_imp / non_pad_tokens_trg
+
+        self.log("test_loss", loss)
+        self.log("test_accuracy", accuracy)
+        self.log("test_attention_mass", attention_mass)
+
+    def _compute_loss(self, batch, stage=None):
+
+        src, src_len, trg, trg_len, alignment = batch
         # create tensors here...
+
         src = src.clone().detach().type(long_type).permute(1, 0)
         trg = trg.clone().detach().type(long_type).permute(1, 0)
         alignment = alignment.clone().detach().type(float_type).permute(1, 0, 2)
-        # alignment is not trg_len x batch_size x src_len
 
+        # alignment is not trg_len x batch_size x src_len
         # print (f"source shape {src.shape}")
         # print (f"source lens {src_len}")
-        output, attention = self.model(src, src_len, trg)
-        # attention is
 
+        if stage == 'train':
+            output, attention = self.model(src, src_len, trg)
+        else:  # val or test
+            # turn off teacher forcing
+            output, attention = self.model(src, src_len, trg, 0)
+
+        # attention is
         mask = alignment  # generate_mask(attention.shape, src_len)
         # mask shape trg_len x batch_size x src_len
-
         attn_mass_imp = torch.einsum('ijk,ijk->', attention, mask)
-        self.total_attn_mass_imp += attn_mass_imp
+        # self.train_total_attn_mass_imp += attn_mass_imp
 
         # print (output.shape)
-
         # trg = [trg sent len, batch size]
         # output = [trg sent len, batch size, output dim]
 
         output = output[1:].contiguous().view(-1, output.shape[-1])
+
         # print (output.shape)
+
         predictions = torch.argmax(output, dim=1)  # long tensor
         trg = trg[1:].contiguous().view(-1)
 
@@ -116,21 +160,23 @@ class BiGRU(pl.LightningModule):
 
         trg_non_pad_indices = (trg != utils.PAD_token)
         non_pad_tokens_trg = torch.sum(trg_non_pad_indices).item()
+
         # non_pad_tokens_src = torch.sum((src != utils.PAD_token)).item()
 
-        self.total_trg += non_pad_tokens_trg  # non pad tokens trg
+        # self.train_total_trg += non_pad_tokens_trg  # non pad tokens trg
+
         # total_src += non_pad_tokens_src # non pad tokens src
-        self.total_correct += torch.sum((trg == predictions) * trg_non_pad_indices).item()
 
-        loss = self.loss_module(output, trg) - self.coefficient * torch.log(1 - attn_mass_imp / non_pad_tokens_trg)
+        # self.train_total_correct += torch.sum((trg == predictions) * trg_non_pad_indices).item()
+        correct = torch.sum((trg == predictions) * trg_non_pad_indices).item()
 
-        return loss
+        loss = self.loss_module(output, trg)
 
-    def validation_step(self, batch, batch_idx):
-        pass
+        if stage == 'train':
+            # regularize if training
+            loss = loss - self.coefficient * torch.log(1 - attn_mass_imp / non_pad_tokens_trg)
 
-    def test_step(self, batch, batch_idx):
-        pass
+        return loss, attn_mass_imp, non_pad_tokens_trg, correct
 
     @torch.no_grad()
     def translate(self, test_loader):
@@ -147,13 +193,13 @@ class BiGRU(pl.LightningModule):
 
         # ATTENTION this assumes batch size 1, code only works with batch_size 1
 
-        # self.eval()
+        self.eval()
 
         translations = []
         targets = []
 
         for src, src_len, trg, trg_len, _ in tqdm(test_loader):
-            # if len(translations) > 5:
+            # if len(translations) > 3:
             #     break
 
             # create tensors here...
@@ -167,19 +213,23 @@ class BiGRU(pl.LightningModule):
 
             predictions = torch.argmax(output, dim=1)  # long tensor
             # shape [trg len - 1]
-            generated_tokens = [TRG_LANG.get_word(w) for w in predictions.cpu().numpy()]
+            # generated_tokens = [TRG_LANG.get_word(w) for w in predictions.cpu().numpy()]
+            generated_tokens = [TRG_LANG.get_word(w) for w in predictions]
 
             translations.append(" ".join(generated_tokens))
 
             # still with padding
             target = trg[0].cpu().numpy()
 
-            index_eof = np.where(trg[0].cpu().numpy() == 2)
-            assert len(index_eof) == 1  # there should only be one <eof>
+            # index_eof = np.where(trg[0].cpu().numpy() == 2)
+            index_eof = (trg[0] == 2).nonzero()
+            assert index_eof.shape[0] == 1  # there should only be one <eof>
             target = target[1:int(index_eof[0])]
 
             target_tokens = [TRG_LANG.get_word(w) for w in target]
             targets.append(target_tokens)
+
+        self.train()
 
         return translations, targets
 

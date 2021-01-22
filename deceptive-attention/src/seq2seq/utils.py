@@ -70,7 +70,7 @@ class Language:
         return padded_seq[:max_len]
 
 
-def bleu_score_corpus(references, candidates):
+def bleu_score_corpus(references, candidates, logger):
     """
     Computes the (test) corpus wide BLEU score using the library NLTK. Takes a list of reference sentences
     (target sentences in target language) as well as candidates, transforms then into the expected format for NLTK
@@ -82,11 +82,12 @@ def bleu_score_corpus(references, candidates):
     candidate_sentences = [candidate.split() for candidate in candidates]
     target_sentences = [[reference] for reference in references]
 
+    logger.info('\n')
+
     for i in range(len(candidate_sentences[:3])):
-        print('\n')
-        print('candidate ', candidate_sentences[i])
-        print('reference ', target_sentences[i])
-        print('\n')
+        logger.info(f'candidate {candidate_sentences[i]}')
+        logger.info(f'reference {target_sentences[i]}')
+        logger.info('\n')
 
     # Expected structure by NLTK
     # target Sentences: [[...], [...]]

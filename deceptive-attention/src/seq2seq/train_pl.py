@@ -9,6 +9,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 
 import utils
 from batch_utils import SentenceDataModule, TRG_LANG, SRC_LANG
+from log_utils import setup_logger
 from model import BiGRU
 from utils import *
 
@@ -27,10 +28,12 @@ PAD_IDX = utils.PAD_token
 SOS_IDX = utils.SOS_token
 EOS_IDX = utils.EOS_token
 
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 
 class TranslationCallback(pl.Callback):
 
-    def __init__(self, samples, test_loader, out_path, every_n_epochs=10, save_to_disk=False):
+    def __init__(self, test_loader, out_path, logger, every_n_epochs=10, save_to_disk=False):
         """
         Callback for translating sentences to TensorBoard and/or save them to disk every N epochs across training.
         Inputs:
@@ -43,6 +46,7 @@ class TranslationCallback(pl.Callback):
         self.every_n_epochs = every_n_epochs
         self.save_to_disk = save_to_disk
         self.out_path = out_path
+        self.logger = logger
 
     def on_epoch_end(self, trainer, pl_module):
         """
@@ -65,10 +69,11 @@ class TranslationCallback(pl.Callback):
         """
 
         translations, targets = pl_module.translate(self.test_loader)
-        bleu_score = bleu_score_corpus(targets, translations) * 100
-        print('BLEU score: ', bleu_score)
+        bleu_score = bleu_score_corpus(targets, translations, self.logger) * 100
 
-        trainer.logger.experiment.add_scalar("bleu_score", bleu_score, global_step=epoch)
+        self.logger.info(f'BLEU score: {bleu_score}')
+        pl_module.log("bleu_score", bleu_score)
+        # trainer.logger.experiment.add_scalar("bleu_score", bleu_score, global_step=epoch)
 
         fw = open(f"{self.out_path}.test.out", 'w')
         for line in translations:
@@ -89,31 +94,44 @@ def train_gru(parameters):
     os.makedirs(DATA_VOCAB_PATH, exist_ok=True)
 
     task = parameters.task
+    batch_size = parameters.batch_size
+    num_train = parameters.num_train
+    debug = parameters.debug
+    epochs = parameters.epochs
+    seed = parameters.seed
+    attention = parameters.attention
+    coeff = parameters.loss_coeff
 
-    print('Initializing data module ...')
+    logger = setup_logger(LOG_PATH, 'task=%s_coeff=%s_seed=%s' % (task, coeff, seed))
+
+    logger.info(f'Configuration:\n epochs: {epochs}\n coeff: {coeff}\n seed: {seed}\n batch_size: ' +
+                f'{batch_size}\n attention: {attention}\n debug: {debug}\n num_train: {num_train}\n device: {DEVICE}\n '
+                f'task: {task}\n')
+
+    logger.info('Initializing data module ..........')
 
     data_module = SentenceDataModule(task=task,
-                                     batch_size=parameters.batch_size,
-                                     num_train=parameters.num_train,
-                                     debug=parameters.debug)
+                                     batch_size=batch_size,
+                                     num_train=num_train,
+                                     debug=debug)
     data_module.setup()
 
     # Create a PyTorch Lightning trainer with the generation callback
 
     translation_callback = None
     if task == 'en-de':
-        print('Creating translation callback ...')
-        translation_callback = TranslationCallback(data_module.test.samples,
-                                                   data_module.test_dataloader(batch_size=1),
+        logger.info('Creating translation callback ..........\n')
+        translation_callback = TranslationCallback(data_module.test_dataloader(batch_size=1),
                                                    out_path=get_out_path(parameters),
-                                                   save_to_disk=True)
+                                                   logger=logger,
+                                                   save_to_disk=True,
+                                                   every_n_epochs=2)
 
-    tb_logger = pl_loggers.TensorBoardLogger('logs/')
     trainer = Trainer(default_root_dir=LOG_PATH,
-                      logger=tb_logger,
+                      logger=pl_loggers.TensorBoardLogger(LOG_PATH),
                       checkpoint_callback=ModelCheckpoint(save_weights_only=True),
                       gpus=1 if torch.cuda.is_available() else 0,
-                      max_epochs=parameters.epochs,
+                      max_epochs=epochs,
                       callbacks=[translation_callback],
                       progress_bar_refresh_rate=1)
 
@@ -121,7 +139,7 @@ def train_gru(parameters):
     trainer.logger._default_hp_metric = None
 
     # Create model
-    pl.seed_everything(parameters.seed)
+    pl.seed_everything(seed)
 
     model = BiGRU(input_dim=SRC_LANG.get_vocab_size(),
                   output_dim=TRG_LANG.get_vocab_size(),
@@ -131,26 +149,28 @@ def train_gru(parameters):
                   decoder_emb_dim=DEC_EMB_DIM,
                   encoder_dropout=ENC_DROPOUT,
                   decoder_dropout=DEC_DROPOUT,
-                  attention_type=parameters.attention,
+                  attention_type=attention,
                   pad_idx=PAD_IDX,
                   sos_idx=SOS_IDX,
                   eos_idx=EOS_IDX,
-                  coeff=parameters.loss_coeff,
+                  coeff=coeff,
                   decode_with_no_attention=parameters.no_attn_inference)
 
-    print('Fitting model ...')
+    logger.info('\nInitializing model ..........')
+    logger.info(f'The model has {model.count_parameters():,} trainable parameters.\n')
 
     # Training
 
     if translation_callback is not None:
-        print('Generating initial translations ...')
+        logger.info('Generating initial translations ..........')
         translation_callback.generate(trainer, model, epoch=0)
 
+    logger.info('Fitting model ..........')
     trainer.fit(model, data_module)
 
     if translation_callback is not None:
-        print('Generating final translations ...')
-        translation_callback.generate(trainer, model, epoch=parameters.epochs)
+        logger.info('Generating final translations ..........')
+        translation_callback.generate(trainer, model, epoch=epochs)
 
     return model
 

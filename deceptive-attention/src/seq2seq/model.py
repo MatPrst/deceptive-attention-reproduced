@@ -18,6 +18,7 @@ if use_cuda:
     float_type = torch.cuda.FloatTensor
 
 
+# noinspection PyCallingNonCallable
 class BiGRU(pl.LightningModule):
 
     def __init__(self, input_dim, output_dim, encoder_hid_dim, decoder_hid_dim, encoder_emb_dim, decoder_emb_dim,
@@ -52,7 +53,6 @@ class BiGRU(pl.LightningModule):
         else:
             dec = Decoder(output_dim, decoder_emb_dim, encoder_hid_dim, decoder_hid_dim, decoder_dropout, attention)
 
-        # self.model = Seq2Seq(encoder, dec, pad_idx, sos_idx, eos_idx, DEVICE).to(DEVICE)
         self.model = Seq2Seq(encoder, dec, pad_idx, sos_idx, eos_idx)
 
         # initialize all weights in this model
@@ -86,39 +86,24 @@ class BiGRU(pl.LightningModule):
             batch         - Input batch, output of the training loader.
             batch_idx     - Index of the batch in the dataset (not needed here).
         """
-        #
-        # print('all devices')
-        # print('seq2seq ', self.model.device)
-        # print('decoder ', self.model.decoder.device)
-        # print('attention ', self.model.decoder.attention.device)
-        # print('encoder ', self.model.encoder.device)
 
-        loss, attn_mass_imp, non_pad_tokens_trg, correct = self._compute_loss(batch, 'train')
-
-        train_accuracy = 100. * correct / non_pad_tokens_trg
-        train_attention_mass = 100. * attn_mass_imp / non_pad_tokens_trg
+        loss, accuracy, attention_mass = self._compute_loss(batch, 'train')
 
         self.log("train_loss", loss, on_step=False, on_epoch=True)
-        self.log("train_accuracy", train_accuracy, on_step=False, on_epoch=True)
-        self.log("train_attention_mass", train_attention_mass, on_step=False, on_epoch=True)
+        self.log("train_accuracy", accuracy, on_step=False, on_epoch=True)
+        self.log("train_attention_mass", attention_mass, on_step=False, on_epoch=True)
 
         return loss
 
     def validation_step(self, batch, batch_idx):
-        loss, attn_mass_imp, non_pad_tokens_trg, correct = self._compute_loss(batch, 'val')
-
-        accuracy = 100. * correct / non_pad_tokens_trg
-        attention_mass = 100. * attn_mass_imp / non_pad_tokens_trg
+        loss, accuracy, attention_mass = self._compute_loss(batch, 'val')
 
         self.log("val_loss", loss)
         self.log("val_accuracy", accuracy)
         self.log("val_attention_mass", attention_mass)
 
     def test_step(self, batch, batch_idx):
-        loss, attn_mass_imp, non_pad_tokens_trg, correct = self._compute_loss(batch, 'test')
-
-        accuracy = 100. * correct / non_pad_tokens_trg
-        attention_mass = 100. * attn_mass_imp / non_pad_tokens_trg
+        loss, accuracy, attention_mass = self._compute_loss(batch, 'test')
 
         self.log("test_loss", loss)
         self.log("test_accuracy", accuracy)
@@ -142,19 +127,6 @@ class BiGRU(pl.LightningModule):
         else:  # val or test
             # turn off teacher forcing
             output, attention = self.model(src, src_len, trg, 0)
-
-        # somehow the trainer does not automatically also move data to the correct device!
-        # output = output.to(self.model.device)
-        # attention = attention.to(self.model.device)
-
-        # if self.model.device != torch.device("cuda:0"):
-        #     print('self.model device: ', self.model.device)
-        #
-        # if output.device != torch.device("cuda:0"):
-        #     print('output device: ', output.device)
-        #
-        # if attention.device != torch.device("cuda:0"):
-        #     print('attention device: ', attention.device)
 
         # attention is
         mask = alignment  # generate_mask(attention.shape, src_len)
@@ -194,7 +166,10 @@ class BiGRU(pl.LightningModule):
             # regularize if training
             loss = loss - self.coefficient * torch.log(1 - attn_mass_imp / non_pad_tokens_trg)
 
-        return loss, attn_mass_imp, non_pad_tokens_trg, correct
+        accuracy = 100. * correct / non_pad_tokens_trg
+        attention_mass = 100. * attn_mass_imp / non_pad_tokens_trg
+
+        return loss, accuracy, attention_mass
 
     @torch.no_grad()
     def translate(self, test_loader):
@@ -217,7 +192,6 @@ class BiGRU(pl.LightningModule):
         targets = []
 
         for src, src_len, trg, _, _ in tqdm(test_loader):
-
             # make sure data is on the correct device
             src = src.to(self.model.device).clone().detach().type(long_type).permute(1, 0)
             src_len = src_len.to(self.model.device)
@@ -225,7 +199,6 @@ class BiGRU(pl.LightningModule):
 
             # trg = torch.tensor(trg).type(long_type).permute(1, 0)
 
-            # noinspection PyCallingNonCallable
             output, attention = self.model(src, src_len, None, 0)  # turn off teacher forcing
 
             output = output[1:].squeeze(dim=1)

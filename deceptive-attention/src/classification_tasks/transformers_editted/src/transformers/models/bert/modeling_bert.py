@@ -286,6 +286,8 @@ class BertSelfAttention(nn.Module):
             # Apply the attention mask is (precomputed for all layers in BertModel forward() function)
             attention_scores = attention_scores + attention_mask
 
+        # print(attention_scores[0, :, 0, :])
+
         # Normalize the attention scores to probabilities.
         attention_probs = nn.Softmax(dim=-1)(attention_scores)
 
@@ -304,12 +306,9 @@ class BertSelfAttention(nn.Module):
 
         if matrix_mask is not None:
             attention_probs = attention_probs * matrix_mask
-        #
-        #
-        # print('after')
-        # print(attention_probs[0][0])
-        #
-        # sys.exit()
+
+        # print('\n')
+        # print(attention_probs[0, :, 0, :])
 
         context_layer = torch.matmul(attention_probs, value_layer)
 

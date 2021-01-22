@@ -21,6 +21,10 @@ def compute_m(sentence_ids, impermissible_ids):
 
     mask = np.asarray([1 if idx in impermissible_ids else 0 for idx in sentence_ids])
 
+    for idx in sentence_ids:
+        if idx in impermissible_ids:
+            print(idx)
+
     return mask
 
 def compute_M(sentence_ids, impermissible_ids):
@@ -115,8 +119,6 @@ class SSTWikiDataset(Dataset):
         else:
             sentence = sentences
 
-        print(sentence)
-
         # tokenize sentence and convert to sequence of ids
         tokenized = self.tokenizer.encode_plus(
             sentence,
@@ -162,7 +164,7 @@ class PronounDataset(Dataset):
         self.text = read_csv(self.path, sep="\t", header=None)
 
         self.anonymization = anonymization
-        self.impermissible = "he she her his him Ms Mr"
+        self.impermissible = "he she her his him ms mr"
 
         self.tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
         self.impermissible_ids = self.tokenizer(text=self.impermissible, return_tensors='np')['input_ids'][0][1:-1]
@@ -185,8 +187,11 @@ class PronounDataset(Dataset):
 
         # if anonymization, we remove the impermissible words from each sentence
         splitted_sentence = sentence.split()
+
         if self.anonymization:
-            sentence = ' '.join([i for i in splitted_sentence if i not in self.impermissible]) # shouldn't it be self.impermissible.split()?
+            sentence = ' '.join([i for i in splitted_sentence if i not in set(self.impermissible.split())])
+            
+        print(sentence)
 
         # tokenize sentence and convert to sequence of ids
         tokenized = self.tokenizer.encode_plus(
@@ -234,7 +239,7 @@ class OccupationDataset(Dataset):
         self.text = read_csv(self.path, sep="\t", header=None)
 
         self.anonymization = anonymization
-        self.impermissible = "he she her his him Ms Mr"
+        self.impermissible = "he she her his him ms mr"
 
         self.tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
         self.impermissible_ids = self.tokenizer(text=self.impermissible, return_tensors='np')['input_ids'][0][1:-1]
@@ -251,8 +256,10 @@ class OccupationDataset(Dataset):
 
         # if anonymization, we remove the impermissible words from each sentence
         splitted_sentence = sentence.split()
+
+        #TODO: apparently some impermissible words still slip through
         if self.anonymization:
-            sentence = ' '.join([i for i in splitted_sentence if i not in self.impermissible]) # shouldn't it be self.impermissible.split()?
+            sentence = ' '.join([i for i in splitted_sentence if i not in set(self.impermissible.split(' '))])
 
         # tokenize sentence and convert to sequence of ids
         tokenized = self.tokenizer.encode_plus(

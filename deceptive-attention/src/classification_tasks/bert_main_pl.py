@@ -11,7 +11,8 @@ from torch.cuda import device_count
 from pytorch_lightning import Trainer
 from pytorch_lightning.core.lightning import LightningModule
 from pytorch_lightning import loggers as pl_loggers
-from pytorch_lightning import metrics
+from pytorch_lightning import metrics, seed_everything
+from pytorch_lightning.callbacks import Callback
 
 # Local dependencies
 from bert_util_pl import GenericDataModule
@@ -53,11 +54,22 @@ class BERTModel(LightningModule):
 
     def forward(self, x, attention_mask, labels, mask_matrices):
         "This method defines how the data is passed through the net."
+
+        # if we are applying the R penalty, apply information flow restriction
+        # by passing in mask_matrices into the the matrix_mask arg
+        # if self.penalize:
+
         output = self.encoder(x,
                               labels=labels,
                               attention_mask=attention_mask,
                               matrix_mask=mask_matrices,
                               output_attentions=True)
+        # else:
+        #     output = self.encoder(x,
+        #                           labels=labels,
+        #                           attention_mask=attention_mask,
+        #                           matrix_mask=None,
+        #                           output_attentions=True)
 
         return output
 
@@ -196,7 +208,7 @@ class BERTModel(LightningModule):
         # take last layer;
         # num_layers x batch_sz x num_heads x n x n
         # -> batch_sz x num_heads x n x n
-        matrices = matrices[-1]
+        matrices = matrices[-1][:,:,0]
 
         # take first row of self-attention matrix
         # row represents extent to which CLS attends to other tokens
@@ -208,38 +220,74 @@ class BERTModel(LightningModule):
         """
         This function computes the R component, which serves as the penalizing mechanism as described in the paper
         """
-        # extract self-attention maps of shape [batch_size, num_layers, num_heads, sequence_length, sequence_length]
-        attention_matrices = outputs.attentions
-        # convert attention matrices to vectors of shape [batch_sz x num_heads x n]
-        attention_vectors = self.convert2vectors(attention_matrices)
 
-        # add implicit dimension to mask_vectors such that it becomes a rank-4 tensor
+        # extract self-attention tuple of size 12 (one self-attention map per layer)
+        # tuple contains tensors of shape [batch_size, num_heads, sequence_length, sequence_length]
+        attention_matrices = outputs.attentions
+
+        # convert attention matrix of layer 12 to vectors of shape [batch_sz x num_heads x seq_length]
+        # we only consider the last (12th) layer, and only consider the first row
+        # of the self-attention matrix (represents the extent to which CLS attends to others)
+        attention_vectors = attention_matrices[-1][:,:,0]
+
+        # print('attention vectors prior to softmax')
+        # print(attention_vectors[0])
+
+        # attention_vectors = torch.nn.Softmax(dim=-1)(attention_vectors)
+
+        # print('attention vectors post softmax')
+        # print(attention_vectors[0])
+        #
+        # print('\n')
+
+        # add implicit dimension to mask_vectors such that it becomes [batch_size, 1, seq_length]
         mask_vectors = mask_vectors.unsqueeze(1)
 
-        # compute impermissible attention tensor of shape (batch_size, ||Heads H||, seq_length)
+        # print('vector mask')
+        # print(mask_vectors[0])
+
+        # compute impermissible attention tensor of shape [batch_size, num_heads, seq_length]
         impermissible_attention = attention_vectors * mask_vectors
 
-        # Sum over last dim to get impermissible attention per head
+        # print('impermissible_attention before sum')
+        # print(impermissible_attention[0])
+
+        # we sum over seq_length dim to get the impermissible attention per head
         impermissible_attention = torch.sum(impermissible_attention, dim=2)
+
+        # print('impermissible_attention after sum over seq length')
+        # print(impermissible_attention[0])
 
         # Compute the complement of impermissible attention, or permissible attention
         permissible_attention = 1 - impermissible_attention
+
+        # print('permissible_attention')
+        # print(permissible_attention[0])
+
+        # TODO get rid of nans?
         # log permissible attention per head
         log_permissible_attention = torch.log(permissible_attention)
 
+        # print('log permissible attention')
+        # print(log_permissible_attention[0])
+
         if penalty_fn == 'mean':
-            # Compute R value using 'mean' method by summing over H dimension and dividing by 144
-            R = - lambeda * torch.mean(torch.sum(log_permissible_attention, dim=1))
+            # Compute R value using 'mean' method
+            R = - lambeda * torch.mean(log_permissible_attention, dim=1)
+            attention_mass = torch.mean(impermissible_attention, dim=1) * 100
 
         elif penalty_fn == 'max':
-            # Compute R value using 'max' method by summing over H dimension and dividing by 144
-            R = - lambeda * torch.min(torch.sum(log_permissible_attention, dim=1))
+            # Compute R value using 'max' method
+            R = - lambeda * torch.min(log_permissible_attention, dim=1)[0]
+            attention_mass = torch.max(impermissible_attention, dim=1)[0] * 100
 
-        # compute attention mass:
-        # "the sum of attention values over the set of impermissible tokens averaged over all the examples"
-        attention_mass = torch.mean(torch.mean(impermissible_attention, dim=1))*100
+        # # compute attention mass:
+        # # "the sum of attention values over the set of impermissible tokens averaged over all the examples"
+        # attention_mass = torch.mean(torch.mean(impermissible_attention, dim=1))*100
 
-        return R, attention_mass
+        # print(attention_mass)
+
+        return R, torch.mean(attention_mass).item()
 
 
 def main(args):
@@ -249,7 +297,7 @@ def main(args):
     print('Arguments: ')
     for arg in vars(args):
         print(str(arg) + ': ' + str(getattr(args, arg)))
-    print('no of devices found: {}\n\nStandard transformer warning:\n'.format(device_count()))
+    print("\nStandard transformer warning (which you don't need to worry about):\n")
 
     if config.debug:
         torch.autograd.set_detect_anomaly(True)
@@ -261,15 +309,15 @@ def main(args):
                       lambeda=config.lambeda,
                       penalty_fn=config.penalty_fn)
 
-    print('\n GPU loading prompt \n ') if device_count() > 0 else print('')
+    print("\nStandard GPU loading prompt (which you, again, don't need to worry about): \n ") if device_count() > 0 else print('')
 
     # Main Lightning code
-
     tb_logger = pl_loggers.TensorBoardLogger('logs/')
     trainer = Trainer(gpus=config.gpus,
                       logger=tb_logger,
                       log_every_n_steps=config.log_every,
-                      accelerator=config.accelerator)
+                      accelerator=config.accelerator,
+                      max_epochs=1000)
 
     dm = GenericDataModule(task=config.task,
                            anonymization=config.anon,
@@ -277,6 +325,7 @@ def main(args):
                            batch_size=config.batch_size,
                            num_workers=config.num_workers)
 
+    # train model for 10 epochs
     trainer.fit(model, dm)
 
 if __name__ == '__main__':
@@ -287,12 +336,14 @@ if __name__ == '__main__':
                         help='toggle elaborate torch errors')
 
     # Torch / lightning specific args
-    parser.add_argument('--gpus', default=device_count())
+    num_gpus = 1 if device_count() > 0 else None
+    parser.add_argument('--gpus', default=num_gpus)
 
-    accelerator = 'ddp_spawn' if device_count() > 0 else None
+    accelerator = None if device_count() > 0 else None
     parser.add_argument('--accelerator', default=accelerator)
 
-    parser.add_argument('--num_workers', default=0, type=int,
+    num_workers = os.cpu_count() if device_count() > 0 else None
+    parser.add_argument('--num_workers', default=num_workers, type=int,
                         help='no. of workers for DataLoaders')
 
     log_every = 10 if device_count() > 0 else 1
@@ -300,8 +351,8 @@ if __name__ == '__main__':
                         help='number of steps between loggings')
 
     # Learning specific args
-    # batch_size = 32 if device_count() > 0 else 16
-    parser.add_argument('--batch_size', default=16, type=int,
+    batch_size = 32 if device_count() > 0 else 16
+    parser.add_argument('--batch_size', default=batch_size, type=int,
                         help='no. of sentences sampled per pass')
     parser.add_argument('--lr', default=5e-5, type=float,
                         help='learning rate')

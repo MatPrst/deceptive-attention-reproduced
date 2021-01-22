@@ -4,7 +4,6 @@ import os
 import pytorch_lightning as pl
 import torch
 from pytorch_lightning import Trainer
-from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 import utils
@@ -14,6 +13,7 @@ from model import BiGRU
 from utils import *
 
 LOG_PATH = "logs/"
+BIGRU_LOGS = LOG_PATH + 'BiGRU'
 DATA_PATH = "data/"
 DATA_VOCAB_PATH = "data/vocab/"
 DATA_MODELS_PATH = "data/models/"
@@ -27,8 +27,6 @@ DEC_DROPOUT = 0.5
 PAD_IDX = utils.PAD_token
 SOS_IDX = utils.SOS_token
 EOS_IDX = utils.EOS_token
-
-DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 class TranslationCallback(pl.Callback):
@@ -48,12 +46,21 @@ class TranslationCallback(pl.Callback):
         self.out_path = out_path
         self.logger = logger
 
+    def on_pretrain_routine_start(self, trainer, pl_module):
+        self.logger.info('Generating initial translations ..........')
+        self.generate(trainer, pl_module, 0)
+
+    def teardown(self, trainer, pl_module, stage):
+        self.logger.info('Generating final translations ..........')
+        self.generate(trainer, pl_module, trainer.current_epoch)
+
     def on_epoch_end(self, trainer, pl_module):
         """
         This function is called after every epoch.
         Call the save_and_sample function every N epochs.
         """
         if (trainer.current_epoch + 1) % self.every_n_epochs == 0:
+            self.logger.info(f'Generating translations at epoch {trainer.current_epoch + 1} ..........')
             self.generate(trainer, pl_module, trainer.current_epoch + 1)
 
     def generate(self, trainer, pl_module, epoch):
@@ -68,10 +75,13 @@ class TranslationCallback(pl.Callback):
                           and saving of the files.
         """
 
+        # print('Translation: BiGRU Model on device: ', pl_module.device)
+        # print('Translation: Seq2Seq Model on device: ', pl_module.model.device)
+
         translations, targets = pl_module.translate(self.test_loader)
         bleu_score = bleu_score_corpus(targets, translations, self.logger) * 100
 
-        self.logger.info(f'BLEU score: {bleu_score}')
+        self.logger.info(f'BLEU score: {bleu_score}\n')
         pl_module.log("bleu_score", bleu_score)
         # trainer.logger.experiment.add_scalar("bleu_score", bleu_score, global_step=epoch)
 
@@ -89,6 +99,7 @@ def train_gru(parameters):
     """
 
     os.makedirs(LOG_PATH, exist_ok=True)
+    os.makedirs(BIGRU_LOGS, exist_ok=True)
     os.makedirs(DATA_PATH, exist_ok=True)
     os.makedirs(DATA_MODELS_PATH, exist_ok=True)
     os.makedirs(DATA_VOCAB_PATH, exist_ok=True)
@@ -105,7 +116,7 @@ def train_gru(parameters):
     logger = setup_logger(LOG_PATH, 'task=%s_coeff=%s_seed=%s' % (task, coeff, seed))
 
     logger.info(f'Configuration:\n epochs: {epochs}\n coeff: {coeff}\n seed: {seed}\n batch_size: ' +
-                f'{batch_size}\n attention: {attention}\n debug: {debug}\n num_train: {num_train}\n device: {DEVICE}\n '
+                f'{batch_size}\n attention: {attention}\n debug: {debug}\n num_train: {num_train}\n '
                 f'task: {task}\n')
 
     logger.info('Initializing data module ..........')
@@ -127,13 +138,18 @@ def train_gru(parameters):
                                                    save_to_disk=True,
                                                    every_n_epochs=2)
 
-    trainer = Trainer(default_root_dir=LOG_PATH,
-                      logger=pl_loggers.TensorBoardLogger(LOG_PATH),
+    cuda_available = torch.cuda.is_available()
+    print(cuda_available)
+
+    trainer = Trainer(default_root_dir=BIGRU_LOGS,
+                      # logger=pl_loggers.TensorBoardLogger(LOG_PATH),
                       checkpoint_callback=ModelCheckpoint(save_weights_only=True),
-                      gpus=1 if torch.cuda.is_available() else 0,
+                      gpus=1 if cuda_available else 0,
                       max_epochs=epochs,
                       callbacks=[translation_callback],
-                      progress_bar_refresh_rate=1)
+                      progress_bar_refresh_rate=1
+                      # ,accelerator=pl.accelerators.gpu_accelerator.GPUAccelerator
+                      )
 
     # Optional logging argument that we don't need
     trainer.logger._default_hp_metric = None
@@ -161,29 +177,47 @@ def train_gru(parameters):
 
     # Training
 
-    if translation_callback is not None:
-        logger.info('Generating initial translations ..........')
-        translation_callback.generate(trainer, model, epoch=0)
+    # if translation_callback is not None:
+    #     logger.info('Generating initial translations ..........')
+    #     translation_callback.generate(trainer, model, epoch=0)
 
     logger.info('Fitting model ..........')
     trainer.fit(model, data_module)
 
-    if translation_callback is not None:
-        logger.info('Generating final translations ..........')
-        translation_callback.generate(trainer, model, epoch=epochs)
+    # Testing
+    model = BiGRU.load_from_checkpoint(trainer.checkpoint_callback.best_model_path)
+    test_result = trainer.test(model, test_dataloaders=data_module.test_dataloader(), verbose=True)
+
+    logger.info(f'Test Result: {test_result}')
+    # logger.info(f'\t Test Loss: {test_loss:.3f} |  Test Acc: {test_acc:0.2f} \
+    #             |  Test Attn Mass: {test_attn_mass:0.2f} |  Test PPL: {math.exp(test_loss):7.3f}')
+    #
+    # logger.info(f"Final Test Accuracy ..........\t{test_acc:0.2f}")
+    # logger.info(f"Final Test Attention Mass ....\t{test_attn_mass:0.2f}")
+    # logger.info(f"Convergence time in seconds ..\t{convergence_time:0.2f}")
+    # logger.info(f"Sample efficiency in epochs ..\t{epochs_taken_to_converge}")
+
+    # save the vocabulary
+    out_path = f"{DATA_VOCAB_PATH}{task}{get_suffix(attention)}_seed={str(seed)}_coeff={str(coeff)}_num-train={str(num_train)}"
+    SRC_LANG.save_vocab(f"{out_path}.src.vocab")
+    TRG_LANG.save_vocab(f"{out_path}.trg.vocab")
 
     return model
 
 
 def get_out_path(parameters):
-    suffix = ''
-    if parameters.attention == 'uniform':
-        suffix = "_uniform"
-    elif parameters.attention == 'no_attention':
-        suffix = "_no-attn"
-
+    suffix = get_suffix(parameters.attention)
     return f"{DATA_VOCAB_PATH}{parameters.task}{suffix}_seed={str(parameters.seed)}_coeff=" \
            f"{str(parameters.loss_coeff)}_num-train={str(parameters.num_train)}"
+
+
+def get_suffix(attention):
+    suffix = ''
+    if attention == 'uniform':
+        suffix = "_uniform"
+    elif attention == 'no_attention':
+        suffix = "_no-attn"
+    return suffix
 
 
 if __name__ == '__main__':

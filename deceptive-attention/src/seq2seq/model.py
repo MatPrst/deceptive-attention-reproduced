@@ -17,7 +17,8 @@ if use_cuda:
     long_type = torch.cuda.LongTensor
     float_type = torch.cuda.FloatTensor
 
-DEVICE = torch.device('cuda' if use_cuda else 'cpu')
+
+# DEVICE = torch.device('cuda' if use_cuda else 'cpu')
 
 
 class BiGRU(pl.LightningModule):
@@ -54,7 +55,8 @@ class BiGRU(pl.LightningModule):
         else:
             dec = Decoder(output_dim, decoder_emb_dim, encoder_hid_dim, decoder_hid_dim, decoder_dropout, attention)
 
-        self.model = Seq2Seq(encoder, dec, pad_idx, sos_idx, eos_idx, DEVICE).to(DEVICE)
+        # self.model = Seq2Seq(encoder, dec, pad_idx, sos_idx, eos_idx, DEVICE).to(DEVICE)
+        self.model = Seq2Seq(encoder, dec, pad_idx, sos_idx, eos_idx)
 
         # initialize all weights in this model
         self.apply(self._init_weights)
@@ -87,6 +89,12 @@ class BiGRU(pl.LightningModule):
             batch         - Input batch, output of the training loader.
             batch_idx     - Index of the batch in the dataset (not needed here).
         """
+        #
+        # print('all devices')
+        # print('seq2seq ', self.model.device)
+        # print('decoder ', self.model.decoder.device)
+        # print('attention ', self.model.decoder.attention.device)
+        # print('encoder ', self.model.encoder.device)
 
         loss, attn_mass_imp, non_pad_tokens_trg, correct = self._compute_loss(batch, 'train')
 
@@ -137,6 +145,19 @@ class BiGRU(pl.LightningModule):
         else:  # val or test
             # turn off teacher forcing
             output, attention = self.model(src, src_len, trg, 0)
+
+        # somehow the trainer does not automatically also move data to the correct device!
+        # output = output.to(self.model.device)
+        # attention = attention.to(self.model.device)
+
+        # if self.model.device != torch.device("cuda:0"):
+        #     print('self.model device: ', self.model.device)
+        #
+        # if output.device != torch.device("cuda:0"):
+        #     print('output device: ', output.device)
+        #
+        # if attention.device != torch.device("cuda:0"):
+        #     print('attention device: ', attention.device)
 
         # attention is
         mask = alignment  # generate_mask(attention.shape, src_len)
@@ -202,11 +223,35 @@ class BiGRU(pl.LightningModule):
             # if len(translations) > 3:
             #     break
 
+            src = src.to(self.model.device)
+            src_len = src_len.to(self.model.device)
+            trg = trg.to(self.model.device)
+            trg_len = trg_len.to(self.model.device)
+
             # create tensors here...
             src = src.clone().detach().type(long_type).permute(1, 0)
             # trg = torch.tensor(trg).type(long_type).permute(1, 0)
 
+            if src.device != torch.device("cuda:0"):
+                print('src device: ', src.device)
+                print('src device type: ', type(src.device))
+
+            if src_len.device != torch.device("cuda:0"):
+                print('src len device: ', src_len.device)
+
+            if self.device != torch.device("cuda:0"):
+                print('biGRU device: ', self.device)
+
+            # if self.model.device != 'cuda:0':
+            #     print('seq2seq model device: ', self.model.device)
+
             output, attention = self.model(src, src_len, None, 0)  # turn off teacher forcing
+
+            if output.device != torch.device("cuda:0"):
+                print('output device: ', output.device)
+
+            if attention.device != torch.device("cuda:0"):
+                print('attention device: ', attention.device)
 
             output = output[1:].squeeze(dim=1)
             # output = [(trg sent len - 1), output dim]
@@ -219,10 +264,11 @@ class BiGRU(pl.LightningModule):
             translations.append(" ".join(generated_tokens))
 
             # still with padding
-            target = trg[0].cpu().numpy()
+            # target = trg[0].cpu().numpy()
+            target = trg[0]
 
             # index_eof = np.where(trg[0].cpu().numpy() == 2)
-            index_eof = (trg[0] == 2).nonzero()
+            index_eof = (target == 2).nonzero()
             assert index_eof.shape[0] == 1  # there should only be one <eof>
             target = target[1:int(index_eof[0])]
 
@@ -238,11 +284,11 @@ class BiGRU(pl.LightningModule):
 # https://github.com/bentrevett/pytorch-seq2seq/
 
 
-class Encoder(torch.nn.Module):
+class Encoder(nn.Module):
     """ encoder for seq2seq model """
 
     def __init__(self, input_dim, emb_dim, enc_hid_dim, dec_hid_dim, dropout):
-        super(Encoder, self).__init__()
+        super().__init__()
 
         self.input_dim = input_dim
         self.emb_dim = emb_dim
@@ -257,6 +303,13 @@ class Encoder(torch.nn.Module):
         self.fc = nn.Linear(enc_hid_dim * 2, dec_hid_dim)
 
         self.dropout = nn.Dropout(dropout)
+
+    @property
+    def device(self):
+        """
+        Property function to get the device on which the generator is
+        """
+        return next(self.parameters()).device
 
     def forward(self, src, src_len):
         """ returns out from RNN
@@ -311,6 +364,13 @@ class Attention(nn.Module):
 
         self.attn = nn.Linear((enc_hid_dim * 2) + dec_hid_dim, dec_hid_dim)
         self.v = nn.Parameter(torch.rand(dec_hid_dim))
+
+    @property
+    def device(self):
+        """
+        Property function to get the device on which the generator is
+        """
+        return next(self.parameters()).device
 
     def forward(self, hidden, encoder_outputs, mask):
         # hidden = [batch size, dec hid dim]
@@ -371,6 +431,13 @@ class DecoderUniform(nn.Module):
         self.out = nn.Linear((enc_hid_dim * 2) + dec_hid_dim + emb_dim, output_dim)
 
         self.dropout = nn.Dropout(dropout)
+
+    @property
+    def device(self):
+        """
+        Property function to get the device on which the generator is
+        """
+        return next(self.parameters()).device
 
     def forward(self, input, hidden, encoder_outputs, mask):
         """ returns
@@ -457,6 +524,13 @@ class DecoderNoAttn(nn.Module):
         self.out = nn.Linear((enc_hid_dim * 2) + dec_hid_dim + emb_dim, output_dim)
 
         self.dropout = nn.Dropout(dropout)
+
+    @property
+    def device(self):
+        """
+        Property function to get the device on which the generator is
+        """
+        return next(self.parameters()).device
 
     def forward(self, input, hidden, encoder_outputs, mask):
         """ returns
@@ -551,6 +625,13 @@ class Decoder(nn.Module):
 
         self.dropout = nn.Dropout(dropout)
 
+    @property
+    def device(self):
+        """
+        Property function to get the device on which the generator is
+        """
+        return next(self.parameters()).device
+
     def forward(self, input, hidden, encoder_outputs, mask):
         """ returns
         Parameters:
@@ -617,7 +698,7 @@ class Decoder(nn.Module):
 
 
 class Seq2Seq(nn.Module):
-    def __init__(self, encoder, decoder, pad_idx, sos_idx, eos_idx, device):
+    def __init__(self, encoder, decoder, pad_idx, sos_idx, eos_idx):
         super().__init__()
 
         self.encoder = encoder
@@ -625,7 +706,14 @@ class Seq2Seq(nn.Module):
         self.pad_idx = pad_idx
         self.sos_idx = sos_idx
         self.eos_idx = eos_idx
-        self.device = device
+        # self.device = device
+
+    @property
+    def device(self):
+        """
+        Property function to get the device on which the generator is
+        """
+        return next(self.parameters()).device
 
     def create_mask(self, src):
         mask = (src != self.pad_idx).permute(1, 0)
@@ -644,7 +732,8 @@ class Seq2Seq(nn.Module):
         if trg is None:
             assert teacher_forcing_ratio == 0, "Must be zero during inference"
             inference = True
-            trg = torch.zeros((max_len, src.shape[1])).long().fill_(self.sos_idx).to(src.device)
+            trg = torch.zeros((max_len, src.shape[1])).long().fill_(self.sos_idx).to(self.device)
+            # trg = torch.zeros((max_len, src.shape[1])).long().fill_(self.sos_idx)
         else:
             inference = False
 
@@ -654,9 +743,11 @@ class Seq2Seq(nn.Module):
 
         # tensor to store decoder outputs
         outputs = torch.zeros(max_len, batch_size, trg_vocab_size).to(self.device)
+        # outputs = torch.zeros(max_len, batch_size, trg_vocab_size)
 
         # tensor to store attention
         attentions = torch.zeros(max_len, batch_size, src.shape[0]).to(self.device)
+        # attentions = torch.zeros(max_len, batch_size, src.shape[0])
 
         # encoder_outputs is all hidden states of the input sequence, back and forwards
         # hidden is the final forward and backward hidden states, passed through a linear layer

@@ -192,6 +192,7 @@ class BiGRU(pl.LightningModule):
         targets = []
 
         for src, src_len, trg, _, _ in tqdm(test_loader):
+
             # make sure data is on the correct device
             src = src.to(self.model.device).clone().detach().type(long_type).permute(1, 0)
             src_len = src_len.to(self.model.device)

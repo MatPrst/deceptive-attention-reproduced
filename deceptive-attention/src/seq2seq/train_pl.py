@@ -138,13 +138,10 @@ def train_gru(parameters):
                                                    save_to_disk=True,
                                                    every_n_epochs=2)
 
-    cuda_available = torch.cuda.is_available()
-    print(cuda_available)
-
     trainer = Trainer(default_root_dir=BIGRU_LOGS,
                       # logger=pl_loggers.TensorBoardLogger(LOG_PATH),
                       checkpoint_callback=ModelCheckpoint(save_weights_only=True),
-                      gpus=1 if cuda_available else 0,
+                      gpus=1 if torch.cuda.is_available() else 0,
                       max_epochs=epochs,
                       callbacks=[translation_callback],
                       progress_bar_refresh_rate=1

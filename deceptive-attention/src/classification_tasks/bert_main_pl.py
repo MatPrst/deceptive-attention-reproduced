@@ -221,7 +221,7 @@ class BERTModel(LightningModule):
         attention_vectors = attention_matrices[-1][:,:,0]
 
         # print('attention vectors prior to softmax')
-        # print(attention_vectors[0])
+        # print(attention_vectors[0].shape)
 
         # attention_vectors = torch.nn.Softmax(dim=-1)(attention_vectors)
 
@@ -248,19 +248,20 @@ class BERTModel(LightningModule):
         # print('impermissible_attention after sum over seq length')
         # print(impermissible_attention[0])
 
+        # For some miraculous reason, the attention_probs from BERT occasionally
+        # exceed 1.00, which introduce nans with the torch.log() hereafter.
+        # Therefore, we re-set values that exceed > 1 to a value just below 1.
+        impermissible_attention[impermissible_attention[:,:] > 1] = 0.999
+
         # Compute the complement of impermissible attention, or permissible attention
         permissible_attention = 1 - impermissible_attention
 
-        # print('permissible_attention')
         # print(permissible_attention[0])
 
-        # TODO get rid of nans?
         # log permissible attention per head
         log_permissible_attention = torch.log(permissible_attention)
 
-        # print('log permissible attention')
         # print(log_permissible_attention[0])
-
         if penalty_fn == 'mean':
             # Compute R value using 'mean' method
             R = - lambeda * torch.mean(log_permissible_attention, dim=1)
@@ -271,14 +272,7 @@ class BERTModel(LightningModule):
             R = - lambeda * torch.min(log_permissible_attention, dim=1)[0]
             attention_mass = torch.max(impermissible_attention, dim=1)[0] * 100
 
-        # # compute attention mass:
-        # # "the sum of attention values over the set of impermissible tokens averaged over all the examples"
-        # attention_mass = torch.mean(torch.mean(impermissible_attention, dim=1))*100
-
-        # print(attention_mass)
-
         return R, torch.mean(attention_mass).item()
-
 
 def main(args):
 

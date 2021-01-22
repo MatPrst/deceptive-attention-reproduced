@@ -18,9 +18,6 @@ if use_cuda:
     float_type = torch.cuda.FloatTensor
 
 
-# DEVICE = torch.device('cuda' if use_cuda else 'cpu')
-
-
 class BiGRU(pl.LightningModule):
 
     def __init__(self, input_dim, output_dim, encoder_hid_dim, decoder_hid_dim, encoder_emb_dim, decoder_emb_dim,
@@ -219,60 +216,34 @@ class BiGRU(pl.LightningModule):
         translations = []
         targets = []
 
-        for src, src_len, trg, trg_len, _ in tqdm(test_loader):
-            # if len(translations) > 3:
-            #     break
+        for src, src_len, trg, _, _ in tqdm(test_loader):
 
-            src = src.to(self.model.device)
+            # make sure data is on the correct device
+            src = src.to(self.model.device).clone().detach().type(long_type).permute(1, 0)
             src_len = src_len.to(self.model.device)
             trg = trg.to(self.model.device)
-            trg_len = trg_len.to(self.model.device)
 
-            # create tensors here...
-            src = src.clone().detach().type(long_type).permute(1, 0)
             # trg = torch.tensor(trg).type(long_type).permute(1, 0)
 
-            if src.device != torch.device("cuda:0"):
-                print('src device: ', src.device)
-                print('src device type: ', type(src.device))
-
-            if src_len.device != torch.device("cuda:0"):
-                print('src len device: ', src_len.device)
-
-            if self.device != torch.device("cuda:0"):
-                print('biGRU device: ', self.device)
-
-            # if self.model.device != 'cuda:0':
-            #     print('seq2seq model device: ', self.model.device)
-
+            # noinspection PyCallingNonCallable
             output, attention = self.model(src, src_len, None, 0)  # turn off teacher forcing
-
-            if output.device != torch.device("cuda:0"):
-                print('output device: ', output.device)
-
-            if attention.device != torch.device("cuda:0"):
-                print('attention device: ', attention.device)
 
             output = output[1:].squeeze(dim=1)
             # output = [(trg sent len - 1), output dim]
 
             predictions = torch.argmax(output, dim=1)  # long tensor
             # shape [trg len - 1]
-            # generated_tokens = [TRG_LANG.get_word(w) for w in predictions.cpu().numpy()]
-            generated_tokens = [TRG_LANG.get_word(w) for w in predictions]
-
+            generated_tokens = [TRG_LANG.get_word(w) for w in predictions.numpy()]
             translations.append(" ".join(generated_tokens))
 
             # still with padding
-            # target = trg[0].cpu().numpy()
             target = trg[0]
 
-            # index_eof = np.where(trg[0].cpu().numpy() == 2)
             index_eof = (target == 2).nonzero()
             assert index_eof.shape[0] == 1  # there should only be one <eof>
             target = target[1:int(index_eof[0])]
 
-            target_tokens = [TRG_LANG.get_word(w) for w in target]
+            target_tokens = [TRG_LANG.get_word(w) for w in target.numpy()]
             targets.append(target_tokens)
 
         self.train()

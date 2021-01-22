@@ -14,6 +14,7 @@ from model import BiGRU
 DATA_PATH = "../data/"
 LOG_PATH = "logs/"
 LIGHTNING_LOGS = LOG_PATH + 'lightning_logs/'
+TERMINAL_LOGS = LOG_PATH + 'terminal_logs/'
 DATA_VOCAB_PATH = "vocab/"
 
 
@@ -86,6 +87,7 @@ def train_gru(parameters):
 
     os.makedirs(LOG_PATH, exist_ok=True)
     os.makedirs(LIGHTNING_LOGS, exist_ok=True)
+    os.makedirs(TERMINAL_LOGS, exist_ok=True)
     os.makedirs(DATA_PATH, exist_ok=True)
     os.makedirs(DATA_VOCAB_PATH, exist_ok=True)
 
@@ -98,7 +100,7 @@ def train_gru(parameters):
     attention = parameters.attention
     coeff = parameters.loss_coeff
 
-    logger = setup_logger(LOG_PATH, 'task=%s_coeff=%s_seed=%s' % (task, coeff, seed))
+    logger = setup_logger(TERMINAL_LOGS, 'task=%s_coeff=%s_seed=%s' % (task, coeff, seed))
 
     logger.info(f'Configuration:\n epochs: {epochs}\n coeff: {coeff}\n seed: {seed}\n batch_size: ' +
                 f'{batch_size}\n attention: {attention}\n debug: {debug}\n num_train: {num_train}\n '

@@ -43,16 +43,15 @@ parser.add_argument('--batch-size', dest='batch_size', type=int, default=128)
 parser.add_argument('--num-train', dest='num_train', type=int, default=1000000)
 parser.add_argument('--decode-with-no-attn', dest='no_attn_inference', action='store_true')
 
-parser.add_argument('--tensorboard_log', dest='tensorboard_log', action='store_true')
-
 params = vars(parser.parse_args())
 TASK = params['task']
 DEBUG = params['debug']
 COEFF = params['loss_coeff']
 EPOCHS = params['epochs']
-TENSORBOARD_LOG = params['tensorboard_log']
 
 LOG_PATH = "logs/"
+TERMINAL_LOGS = LOG_PATH + 'terminal_logs/'
+TENSORBOARD_LOG = LOG_PATH + 'tensorboard/'
 DATA_PATH = "../data/"
 DATA_VOCAB_PATH = "vocab/"
 DATA_MODELS_PATH = "models/"
@@ -356,9 +355,9 @@ def train(task=TASK,
 
     writer = None
     if tensorboard_log:
-        writer = SummaryWriter(LOG_PATH + 'tensorboard/')
+        writer = SummaryWriter(TENSORBOARD_LOG)
 
-    logger = setup_logger(LOG_PATH, 'task=%s_coeff=%s_seed=%s' % (task, coeff, seed))
+    logger = setup_logger(TERMINAL_LOGS, 'task=%s_coeff=%s_seed=%s' % (task, coeff, seed))
 
     logger.info("Starting training..........")
     logger.info(f'Configuration:\n epochs: {epochs}\n coeff: {coeff}\n seed: {seed}\n batch_size: ' +
@@ -487,17 +486,11 @@ def generate_translations(model, sentences, logger):
 def main():
     # Create directories if not already existent
 
-    if not os.path.exists(LOG_PATH):
-        os.makedirs(LOG_PATH)
-
-    if not os.path.exists(DATA_PATH):
-        os.makedirs(DATA_PATH)
-
-    if not os.path.exists(DATA_MODELS_PATH):
-        os.makedirs(DATA_MODELS_PATH)
-
-    if not os.path.exists(DATA_VOCAB_PATH):
-        os.makedirs(DATA_VOCAB_PATH)
+    os.makedirs(LOG_PATH, exist_ok=True)
+    os.makedirs(TENSORBOARD_LOG, exist_ok=True)
+    os.makedirs(TERMINAL_LOGS, exist_ok=True)
+    os.makedirs(DATA_PATH, exist_ok=True)
+    os.makedirs(DATA_VOCAB_PATH, exist_ok=True)
 
     train()
 

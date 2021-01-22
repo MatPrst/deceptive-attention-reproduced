@@ -7,7 +7,7 @@ from torch import nn, optim
 from tqdm import tqdm
 
 import utils
-from batch_utils import TRG_LANG
+from data_utils import TRG_LANG
 
 long_type = torch.LongTensor
 float_type = torch.FloatTensor
@@ -148,7 +148,7 @@ class BiGRU(pl.LightningModule):
         # trg = [(trg sent len - 1) * batch size]
         # output = [(trg sent len - 1) * batch size, output dim]
 
-        trg_non_pad_indices = (trg != utils.PAD_token)
+        trg_non_pad_indices = (trg != utils.PAD_IDX)
         non_pad_tokens_trg = torch.sum(trg_non_pad_indices).item()
 
         # non_pad_tokens_src = torch.sum((src != utils.PAD_token)).item()
@@ -207,7 +207,9 @@ class BiGRU(pl.LightningModule):
 
             predictions = torch.argmax(output, dim=1)  # long tensor
             # shape [trg len - 1]
-            generated_tokens = [TRG_LANG.get_word(w) for w in predictions.numpy()]
+
+            # can only be converted to numpy if on CPU
+            generated_tokens = [TRG_LANG.get_word(w) for w in predictions.cpu().numpy()]
             translations.append(" ".join(generated_tokens))
 
             # still with padding
@@ -217,7 +219,8 @@ class BiGRU(pl.LightningModule):
             assert index_eof.shape[0] == 1  # there should only be one <eof>
             target = target[1:int(index_eof[0])]
 
-            target_tokens = [TRG_LANG.get_word(w) for w in target.numpy()]
+            # can only be converted to numpy if on CPU
+            target_tokens = [TRG_LANG.get_word(w) for w in target.cpu().numpy()]
             targets.append(target_tokens)
 
         self.train()

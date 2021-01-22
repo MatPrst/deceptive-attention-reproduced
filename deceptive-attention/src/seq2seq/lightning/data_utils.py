@@ -14,19 +14,19 @@ class SentenceDataset(Dataset):
     This class loads the desired data split for the Occupation Classification dataset
     """
 
-    def __init__(self, task, num_train, batch_size, dataset, debug=False):
+    def __init__(self, task, num_train, batch_size, data_path, dataset, debug=False):
         """
         Args:
         """
 
         self.batch_size = batch_size
 
-        self.src_file = './data/' + dataset + "." + task + '.src'
-        self.trg_file = './data/' + dataset + "." + task + '.trg'
+        self.src_file = data_path + dataset + "." + task + '.src'
+        self.trg_file = data_path + dataset + "." + task + '.trg'
         src_sentences = open(self.src_file).readlines()
         trg_sentences = open(self.trg_file).readlines()
 
-        self.alignment_file = "./data/" + dataset + "." + task + ".align"
+        self.alignment_file = data_path + dataset + "." + task + ".align"
         alignment_sentences = open(self.alignment_file).readlines()
 
         if debug:  # small scale
@@ -125,23 +125,24 @@ class SentenceDataModule(pl.LightningDataModule):
     using predefined task-Dataset instances.
     """
 
-    def __init__(self, task, batch_size, num_train, debug=False):
+    def __init__(self, task, batch_size, num_train, data_path, debug=False):
         super().__init__()
         self.task = task
         self.batch_size = batch_size
         self.num_train = num_train
         self.debug = debug
+        self.data_path = data_path
 
     # noinspection PyAttributeOutsideInit
     def setup(self, stage=None):
-        self.train = SentenceDataset(self.task, self.num_train, self.batch_size, dataset='train', debug=self.debug)
+        self.train = SentenceDataset(self.task, self.num_train, self.batch_size, self.data_path, 'train', debug=self.debug)
 
         # don't accept new words from validation and test set
         SRC_LANG.stop_accepting_new_words()
         TRG_LANG.stop_accepting_new_words()
 
-        self.val = SentenceDataset(self.task, self.num_train, self.batch_size, dataset='dev', debug=self.debug)
-        self.test = SentenceDataset(self.task, self.num_train, self.batch_size, dataset='test', debug=self.debug)
+        self.val = SentenceDataset(self.task, self.num_train, self.batch_size, self.data_path, 'dev', debug=self.debug)
+        self.test = SentenceDataset(self.task, self.num_train, self.batch_size, self.data_path, 'test', debug=self.debug)
 
     def train_dataloader(self):
         return DataLoader(self.train, batch_size=self.batch_size, num_workers=4)

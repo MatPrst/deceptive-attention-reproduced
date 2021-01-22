@@ -7,26 +7,14 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 import utils
-from batch_utils import SentenceDataModule, TRG_LANG, SRC_LANG
+from data_utils import SentenceDataModule, TRG_LANG, SRC_LANG
 from log_utils import setup_logger
 from model import BiGRU
-from utils import *
 
+DATA_PATH = "../data/"
 LOG_PATH = "logs/"
-BIGRU_LOGS = LOG_PATH + 'BiGRU'
-DATA_PATH = "data/"
-DATA_VOCAB_PATH = "data/vocab/"
-DATA_MODELS_PATH = "data/models/"
-
-ENC_EMB_DIM = 256
-DEC_EMB_DIM = 256
-ENC_HID_DIM = 512
-DEC_HID_DIM = 512
-ENC_DROPOUT = 0.5
-DEC_DROPOUT = 0.5
-PAD_IDX = utils.PAD_token
-SOS_IDX = utils.SOS_token
-EOS_IDX = utils.EOS_token
+LIGHTNING_LOGS = LOG_PATH + 'lightning_logs/'
+DATA_VOCAB_PATH = "vocab/"
 
 
 class TranslationCallback(pl.Callback):
@@ -47,12 +35,12 @@ class TranslationCallback(pl.Callback):
         self.logger = logger
 
     def on_pretrain_routine_start(self, trainer, pl_module):
-        self.logger.info('Generating initial translations ..........')
-        self.generate(trainer, pl_module, 0)
+        self.logger.info('Generating initial translations ..........\n')
+        self._generate(trainer, pl_module, 0)
 
     def teardown(self, trainer, pl_module, stage):
-        self.logger.info('Generating final translations ..........')
-        self.generate(trainer, pl_module, trainer.current_epoch)
+        self.logger.info('Generating final translations ..........\n')
+        self._generate(trainer, pl_module, trainer.current_epoch)
 
     def on_epoch_end(self, trainer, pl_module):
         """
@@ -60,10 +48,10 @@ class TranslationCallback(pl.Callback):
         Call the save_and_sample function every N epochs.
         """
         if (trainer.current_epoch + 1) % self.every_n_epochs == 0:
-            self.logger.info(f'Generating translations at epoch {trainer.current_epoch + 1} ..........')
-            self.generate(trainer, pl_module, trainer.current_epoch + 1)
+            self.logger.info(f'Generating translations at epoch {trainer.current_epoch + 1} ..........\n')
+            self._generate(trainer, pl_module, trainer.current_epoch + 1)
 
-    def generate(self, trainer, pl_module, epoch):
+    def _generate(self, trainer, pl_module, epoch):
         """
         Function that generates translations and saves them from the BiGRU.
         The generated samples should be added to TensorBoard and,
@@ -75,11 +63,9 @@ class TranslationCallback(pl.Callback):
                           and saving of the files.
         """
 
-        # print('Translation: BiGRU Model on device: ', pl_module.device)
-        # print('Translation: Seq2Seq Model on device: ', pl_module.model.device)
-
         translations, targets = pl_module.translate(self.test_loader)
-        bleu_score = bleu_score_corpus(targets, translations, self.logger) * 100
+        targets = [[target] for target in targets]
+        bleu_score = utils.bleu_score(targets, translations, self.logger) * 100
 
         self.logger.info(f'BLEU score: {bleu_score}\n')
         pl_module.log("bleu_score", bleu_score)
@@ -99,9 +85,8 @@ def train_gru(parameters):
     """
 
     os.makedirs(LOG_PATH, exist_ok=True)
-    os.makedirs(BIGRU_LOGS, exist_ok=True)
+    os.makedirs(LIGHTNING_LOGS, exist_ok=True)
     os.makedirs(DATA_PATH, exist_ok=True)
-    os.makedirs(DATA_MODELS_PATH, exist_ok=True)
     os.makedirs(DATA_VOCAB_PATH, exist_ok=True)
 
     task = parameters.task
@@ -124,6 +109,7 @@ def train_gru(parameters):
     data_module = SentenceDataModule(task=task,
                                      batch_size=batch_size,
                                      num_train=num_train,
+                                     data_path=DATA_PATH,
                                      debug=debug)
     data_module.setup()
 
@@ -138,15 +124,13 @@ def train_gru(parameters):
                                                    save_to_disk=True,
                                                    every_n_epochs=2)
 
-    trainer = Trainer(default_root_dir=BIGRU_LOGS,
+    trainer = Trainer(default_root_dir=LOG_PATH,
                       # logger=pl_loggers.TensorBoardLogger(LOG_PATH),
                       checkpoint_callback=ModelCheckpoint(save_weights_only=True),
                       gpus=1 if torch.cuda.is_available() else 0,
                       max_epochs=epochs,
                       callbacks=[translation_callback],
-                      progress_bar_refresh_rate=1
-                      # ,accelerator=pl.accelerators.gpu_accelerator.GPUAccelerator
-                      )
+                      progress_bar_refresh_rate=1)
 
     # Optional logging argument that we don't need
     trainer.logger._default_hp_metric = None
@@ -154,35 +138,38 @@ def train_gru(parameters):
     # Create model
     pl.seed_everything(seed)
 
-    model = BiGRU(input_dim=SRC_LANG.get_vocab_size(),
-                  output_dim=TRG_LANG.get_vocab_size(),
-                  encoder_hid_dim=ENC_HID_DIM,
-                  decoder_hid_dim=DEC_HID_DIM,
-                  encoder_emb_dim=ENC_EMB_DIM,
-                  decoder_emb_dim=DEC_EMB_DIM,
-                  encoder_dropout=ENC_DROPOUT,
-                  decoder_dropout=DEC_DROPOUT,
+    input_vocab_size = SRC_LANG.get_vocab_size()
+    output_vocab_size = TRG_LANG.get_vocab_size()
+
+    model = BiGRU(input_dim=input_vocab_size,
+                  output_dim=output_vocab_size,
+                  encoder_hid_dim=parameters.encoder_hid_dim,
+                  decoder_hid_dim=parameters.decoder_hid_dim,
+                  encoder_emb_dim=parameters.encoder_emb_dim,
+                  decoder_emb_dim=parameters.decoder_emb_dim,
+                  encoder_dropout=parameters.encoder_dropout,
+                  decoder_dropout=parameters.decoder_dropout,
                   attention_type=attention,
-                  pad_idx=PAD_IDX,
-                  sos_idx=SOS_IDX,
-                  eos_idx=EOS_IDX,
+                  pad_idx=utils.PAD_IDX,
+                  sos_idx=utils.SOS_IDX,
+                  eos_idx=utils.EOS_IDX,
                   coeff=coeff,
                   decode_with_no_attention=parameters.no_attn_inference)
 
     logger.info('\nInitializing model ..........')
+    logger.info(f"Input vocabulary size {input_vocab_size} and output vocabulary size {output_vocab_size}.")
     logger.info(f'The model has {model.count_parameters():,} trainable parameters.\n')
 
     # Training
 
-    # if translation_callback is not None:
-    #     logger.info('Generating initial translations ..........')
-    #     translation_callback.generate(trainer, model, epoch=0)
-
-    logger.info('Fitting model ..........')
+    logger.info('Fitting model ..........\n')
     trainer.fit(model, data_module)
 
     # Testing
-    model = BiGRU.load_from_checkpoint(trainer.checkpoint_callback.best_model_path)
+    best_model_path = trainer.checkpoint_callback.best_model_path
+    logger.info(f'Best model path: {best_model_path}')
+
+    model = BiGRU.load_from_checkpoint(best_model_path)
     test_result = trainer.test(model, test_dataloaders=data_module.test_dataloader(), verbose=True)
 
     logger.info(f'Test Result: {test_result}')
@@ -223,6 +210,18 @@ if __name__ == '__main__':
 
     # Model hyperparameters
     parser.add_argument('--loss-coef', dest='loss_coeff', type=float, default=0.0)
+
+    parser.add_argument('--encoder-emb-dim', dest='encoder_emb_dim', type=int, default=256)
+
+    parser.add_argument('--decoder-emb-dim', dest='decoder_emb_dim', type=int, default=256)
+
+    parser.add_argument('--encoder-hid-dim', dest='encoder_hid_dim', type=int, default=512)
+
+    parser.add_argument('--decoder-hid-dim', dest='decoder_hid_dim', type=int, default=512)
+
+    parser.add_argument('--encoder-dropout', dest='encoder_dropout', type=float, default=0.5)
+
+    parser.add_argument('--decoder-dropout', dest='decoder_dropout', type=float, default=0.5)
 
     parser.add_argument('--attention', dest='attention', type=str, default='dot-product')
 

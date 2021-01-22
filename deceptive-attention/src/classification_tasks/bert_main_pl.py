@@ -55,21 +55,11 @@ class BERTModel(LightningModule):
     def forward(self, x, attention_mask, labels, mask_matrices):
         "This method defines how the data is passed through the net."
 
-        # if we are applying the R penalty, apply information flow restriction
-        # by passing in mask_matrices into the the matrix_mask arg
-        # if self.penalize:
-
         output = self.encoder(x,
                               labels=labels,
                               attention_mask=attention_mask,
                               matrix_mask=mask_matrices,
                               output_attentions=True)
-        # else:
-        #     output = self.encoder(x,
-        #                           labels=labels,
-        #                           attention_mask=attention_mask,
-        #                           matrix_mask=None,
-        #                           output_attentions=True)
 
         return output
 
@@ -342,7 +332,7 @@ if __name__ == '__main__':
     accelerator = None if device_count() > 0 else None
     parser.add_argument('--accelerator', default=accelerator)
 
-    num_workers = os.cpu_count() if device_count() > 0 else None
+    num_workers = os.cpu_count() if device_count() > 0 else 1
     parser.add_argument('--num_workers', default=num_workers, type=int,
                         help='no. of workers for DataLoaders')
 

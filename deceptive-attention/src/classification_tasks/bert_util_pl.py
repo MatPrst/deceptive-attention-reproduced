@@ -21,9 +21,10 @@ def compute_m(sentence_ids, impermissible_ids):
 
     mask = np.asarray([1 if idx in impermissible_ids else 0 for idx in sentence_ids])
 
-    for idx in sentence_ids:
-        if idx in impermissible_ids:
-            print(idx)
+    # for idx in sentence_ids:
+    #     if idx in impermissible_ids:
+    #         print(sentence_ids)
+    #         print(idx)
 
     return mask
 
@@ -135,6 +136,8 @@ class SSTWikiDataset(Dataset):
 
         # compute vector mask m for each sentence
         mask_vector = compute_m(sentence, impermissible_ids)
+        if self.anonymization:
+            mask_vector = np.zeros(sentence.shape[0])
 
         # compute matrix mask M for each sentence
         mask_matrix = compute_M(sentence, impermissible_ids)
@@ -190,8 +193,6 @@ class PronounDataset(Dataset):
 
         if self.anonymization:
             sentence = ' '.join([i for i in splitted_sentence if i not in set(self.impermissible.split())])
-            
-        print(sentence)
 
         # tokenize sentence and convert to sequence of ids
         tokenized = self.tokenizer.encode_plus(
@@ -209,6 +210,8 @@ class PronounDataset(Dataset):
 
         # compute vector mask m for each sentence
         mask_vector = compute_m(sentence, self.impermissible_ids)
+        if self.anonymization:
+            mask_vector = np.zeros(sentence.shape[0])
 
         # compute matrix mask M for each sentence
         mask_matrix = compute_M(sentence, self.impermissible_ids)
@@ -277,6 +280,8 @@ class OccupationDataset(Dataset):
 
         # compute vector mask m for each sentence
         mask_vector = compute_m(sentence, self.impermissible_ids)
+        if self.anonymization:
+            mask_vector = np.zeros(sentence.shape[0])
 
         # compute matrix mask M for each sentence
         mask_matrix = compute_M(sentence, self.impermissible_ids)

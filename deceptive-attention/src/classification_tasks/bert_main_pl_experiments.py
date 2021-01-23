@@ -272,7 +272,9 @@ def main(args):
                               max_epochs=config.max_epochs,
                               limit_train_batches=config.toy_run,  # if toy_run=1, we only train for a single batch
                               limit_test_batches=config.toy_run,  # across all the splits, which is useful when debugging
-                              limit_val_batches=config.toy_run)  # (default arg is None)
+                              limit_val_batches=config.toy_run, # (default arg is None)
+                              progress_bar_refresh_rate=config.progress_bar,
+                              weights_summary=None) # don't print a summary
 
             # train model
             trainer.fit(model, dm)
@@ -336,7 +338,9 @@ def main(args):
                                       max_epochs=config.max_epochs,
                                       limit_train_batches=config.toy_run,
                                       limit_test_batches=config.toy_run,
-                                      limit_val_batches=config.toy_run)
+                                      limit_val_batches=config.toy_run,
+                                      progress_bar_refresh_rate=config.progress_bar,
+                                      weights_summary=None) # don't print a summary
 
                     # Train model
                     trainer.fit(model, dm)
@@ -401,6 +405,11 @@ if __name__ == '__main__':
                         help='toggle elaborate torch errors')
     parser.add_argument('--toy_run', default=None, type=int,
                         help='set no of batches per datasplit per epoch (helpful for debugging)')
+
+    progress_bar = 0 if device_count() > 0 else 1
+    parser.add_argument('--progress_bar', default=progress_bar, type=int,
+                        help='lightning progress bar flag. disabled on GPU to keep SLURM output neat')
+
     config = parser.parse_args()
 
     # if toy_run is enabled, set a batch size of 8 for quicker epochs

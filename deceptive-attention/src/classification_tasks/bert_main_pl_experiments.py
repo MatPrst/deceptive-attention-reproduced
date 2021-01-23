@@ -21,6 +21,9 @@ from bert_util_pl import GenericDataModule
 # Local transformer dependencies
 from transformers_editted.src.transformers.models.bert.modeling_bert import BertForSequenceClassification
 from transformers_editted.src.transformers.models.auto.tokenization_auto import AutoTokenizer
+from transformers_editted.src.transformers.utils import logging as hf_logging
+
+hf_logging.set_verbosity_error()
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false" # A warning made me do it.
 

@@ -406,7 +406,8 @@ if __name__ == '__main__':
     # Auxiliary args
     parser.add_argument('--debug', default=False, type=bool,
                         help='toggle elaborate torch errors')
-    parser.add_argument('--toy_run', default=None, type=int,
+
+    parser.add_argument('--toy_run', default=1.0, type=float,
                         help='set no of batches per datasplit per epoch (helpful for debugging)')
 
     progress_bar = 0 if device_count() > 0 else 1

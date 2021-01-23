@@ -387,7 +387,7 @@ if __name__ == '__main__':
 
     # Torch / lightning specific args
     num_gpus = 1 if device_count() > 0 else None
-    parser.add_argument('--gpus', default=num_gpus)
+    parser.add_argument('--gpus', default=num_gpus, type=int)
 
     accelerator = None if device_count() > 0 else None
     parser.add_argument('--accelerator', default=accelerator)

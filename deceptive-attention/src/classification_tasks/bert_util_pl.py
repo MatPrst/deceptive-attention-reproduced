@@ -20,12 +20,6 @@ def compute_m(sentence_ids, impermissible_ids):
     """
 
     mask = np.asarray([1 if idx in impermissible_ids else 0 for idx in sentence_ids])
-
-    # for idx in sentence_ids:
-    #     if idx in impermissible_ids:
-    #         print(sentence_ids)
-    #         print(idx)
-
     return mask
 
 def compute_M(sentence_ids, impermissible_ids):
@@ -76,7 +70,7 @@ def compute_M(sentence_ids, impermissible_ids):
 
 class SSTWikiDataset(Dataset):
     """
-    This class loads the desired data split for the Pronoun Classification dataset
+    This class loads and prepares Dataset objects for the Pronoun Classification dataset
     """
 
     def __init__(self, dataset, max_length=180, anonymization=False):
@@ -155,7 +149,7 @@ class SSTWikiDataset(Dataset):
 
 class PronounDataset(Dataset):
     """
-    This class loads the desired data split for the Pronoun Classification dataset
+    This class loads and prepares Dataset objects for the Pronoun Classification dataset
     """
 
     def __init__(self, dataset, max_length=180, anonymization=False):
@@ -229,9 +223,8 @@ class PronounDataset(Dataset):
 
 class OccupationDataset(Dataset):
     """
-    This class loads the desired data split for the Occupation Classification dataset
+    This class This class loads and prepares Dataset objects for the Occupation Classification dataset
     """
-    #TODO: downsample minority classes?
 
     def __init__(self, dataset, max_length=180, anonymization=False):
         """
@@ -259,8 +252,6 @@ class OccupationDataset(Dataset):
 
         # if anonymization, we remove the impermissible words from each sentence
         splitted_sentence = sentence.split()
-
-        #TODO: apparently some impermissible words still slip through
         if self.anonymization:
             sentence = ' '.join([i for i in splitted_sentence if i not in set(self.impermissible.split(' '))])
 
@@ -309,6 +300,7 @@ class GenericDataModule(pl.LightningDataModule):
         self.max_length = max_length
         self.batch_size = batch_size
         self.num_workers = num_workers
+
 
     def setup(self, stage=None):
         if self.task == 'occupation':

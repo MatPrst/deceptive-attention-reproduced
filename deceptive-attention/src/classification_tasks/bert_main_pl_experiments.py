@@ -209,75 +209,151 @@ class BERTModel(LightningModule):
 def main(args):
 
     print('\n -------------- Classification with BERT -------------- \n')
+
     # print CLI args
     print('Arguments: ')
     for arg in vars(args):
         print(str(arg) + ': ' + str(getattr(args, arg)))
-    # Set global seed
+
+    # Set global Lightning seed
     seed_everything(config.seed)
 
-    if config.debug: # This mode turns on more detailed torch error descriptions
+    # This mode turns on more detailed torch error descriptions (False by default)
+    if config.debug:
         torch.autograd.set_detect_anomaly(True)
 
-    print("\nStandard transformer warning (which you don't need to worry about):\n")
+    print("\nStandard GPU loading prompt: \n ") if device_count() > 0 else print('')
 
-    # Logic to define model with specified R calculation, specified self attn mask
-    model = BERTModel(dropout=config.dropout,
-                      lr=config.lr,
-                      penalize=config.penalize,
-                      lambeda=config.lambeda,
-                      penalty_fn=config.penalty_fn)
+    ############################# Code for replicating all 7 experiments for a given task ############################
+    # time the total duration of the experiments
+    start = time.time()
 
-    print("\nStandard GPU loading prompt (which you, again, don't need to worry about): \n ") if device_count() > 0 else print('')
+    # for a given task and seed, there is a single 'anon' experiment, and there are 6 'adversarial' experiments.
+    # we simply run the 7 experiments one after another.
+    for mode in ['anon', 'adversarial']:
 
-    # Main Lightning code
-    tb_logger = pl_loggers.TensorBoardLogger('experiment_results/logs/seed_{}/task_{}/'.format(config.seed, config.task))
-    tb_logger.log_hyperparams(config)
+        if mode == 'anon':
 
-    """ ----------------------------------------------------------------------------------------------------------- """
+            ############################### Code for replicating anonymization experiment ############################
+            print('\n -------------- Beginning Anonymization experiment for task: {} --------------'.format(config.task))
 
-    # for the anonymization task, we want to test using the ckpt with the best dev accuracy
-    # therefore we define a dedicated chkpt callback:
-    checkpoint_callback = ModelCheckpoint(
-        monitor='val_acc',
-        dirpath='experiment_results/checkpoints/seed_{}/task_{}'.format(config.seed, config.task),
-        filename='model-{epoch:02d}-{val_acc:.2f}',
-        save_top_k=3,
-        mode='max',
-    )
+            # Define model
+            print("\nStandard transformer warning (which you don't need to worry about):\n")
+            model = BERTModel(dropout=config.dropout,
+                              lr=config.lr,
+                              penalize=False,
+                              lambeda=0,
+                              penalty_fn='mean')
 
-    dm = GenericDataModule(task=config.task,
-                           anonymization=config.anon,
-                           max_length=config.max_length,
-                           batch_size=config.batch_size,
-                           num_workers=config.num_workers)
+            # Define logger and path
+            logger = pl_loggers.TensorBoardLogger('experiment_results/logs/seed_{}/task_{}/anon/'.format(config.seed, config.task))
+            logger.log_hyperparams(config)
 
-    trainer = Trainer(gpus=config.gpus,
-                      logger=tb_logger,
-                      callbacks=[checkpoint_callback],
-                      log_every_n_steps=config.log_every,
-                      accelerator=config.accelerator,
-                      max_epochs=config.max_epochs,
-                      limit_train_batches=config.toy_run, # if toy_run=1, we only train for a single batch
-                      limit_test_batches=config.toy_run, # across all the splits, which is useful when debugging
-                      limit_val_batches=config.toy_run) # (default arg is None)
+            # for the anonymization task, we want to test using the ckpt with the best dev accuracy
+            # therefore we define a dedicated chkpt callback that monitors the val_acc metric
+            checkpoint_callback = ModelCheckpoint(
+                        monitor='val_acc',
+                        dirpath='experiment_results/checkpoints/seed_{}/task_{}/anon/'.format(config.seed, config.task),
+                        filename='model-{epoch:02d}-{val_acc:.2f}',
+                        save_top_k=1,
+                        mode='max')
 
+            dm = GenericDataModule(task=config.task,
+                                   anonymization=True,
+                                   max_length=config.max_length,
+                                   batch_size=config.batch_size,
+                                   num_workers=config.num_workers)
 
-    # train model for 10 epochs
-    trainer.fit(model, dm)
+            trainer = Trainer(gpus=config.gpus,
+                              logger=logger,
+                              callbacks=[checkpoint_callback],
+                              log_every_n_steps=config.log_every,
+                              accelerator=config.accelerator,
+                              max_epochs=config.max_epochs,
+                              limit_train_batches=config.toy_run,  # if toy_run=1, we only train for a single batch
+                              limit_test_batches=config.toy_run,  # across all the splits, which is useful when debugging
+                              limit_val_batches=config.toy_run)  # (default arg is None)
 
-    # load best checkpoint
-    checkpoint_callback.best_model_path
+            # train model
+            trainer.fit(model, dm)
+            # load checkpoint with best dev accuracy
+            checkpoint_callback.best_model_path
+            # evaluate on test set
+            result = trainer.test()
+            print('results on {} with seed {} with anonymization: '.format(config.task, config.seed))
+            print(result)
 
-    # run test set
-    result = trainer.test()
-    print(result)
+        if mode == 'adversarial':
 
-    # idea:
-    # do run with anonymization=True
-    # do run to get baseline
-    # do run with lambda 0.1
-    # do run with lambda 1.0
+            ############################### Code for replicating adversarial experiments ###############################
+            print('\n -------------- Beginning adversarial experiments for task: {} --------------'.format(config.task))
+
+            # for the 'adversarial' models, there are 2 x 3 = 6 possible experiments that need to be ran.
+            penalty_fns = ['mean', 'max']
+            lambdas = [0, 0.1, 1.0]
+
+            # run experiments for both penalty fns
+            for penalty_fn in penalty_fns:
+
+                # given a penalty fn, run experiments for all values of lambda
+                for lambeda in lambdas:
+
+                    # Define model
+                    print("\nStandard transformer warning (which you don't need to worry about):\n")
+                    model = BERTModel(dropout=config.dropout,
+                                       lr=config.lr,
+                                       penalize=True,
+                                       lambeda=lambeda,
+                                       penalty_fn=penalty_fn)
+
+                    # Specify logger and path
+                    logger = pl_loggers.TensorBoardLogger('experiment_results/logs/seed_{}/task_{}/penalty_{}_lambda_{}/'.format(
+                                                            config.seed, config.task, penalty_fn, lambeda))
+                    logger.log_hyperparams(config)
+
+                    # Specify checkpoint callback and monitoring metric
+                    checkpoint_callback = ModelCheckpoint(
+                                        monitor='val_acc',
+                                          dirpath='experiment_results/checkpoints/seed_{}/task_{}/penalty_{}_lambda_{}/'.format(
+                                              config.seed, config.task, penalty_fn, lambeda),
+                                          filename='model-{epoch:02d}-{val_acc:.2f}',
+                                          save_top_k=1,
+                                          mode='max', )
+
+                    # Initialise DataModule
+                    dm = GenericDataModule(task=config.task,
+                                           anonymization=False,
+                                           max_length=config.max_length,
+                                           batch_size=config.batch_size,
+                                           num_workers=config.num_workers)
+
+                    # Initialise Trainer
+                    trainer = Trainer(gpus=config.gpus,
+                                      logger=logger,
+                                      callbacks=[checkpoint_callback],
+                                      log_every_n_steps=config.log_every,
+                                      accelerator=config.accelerator,
+                                      max_epochs=config.max_epochs,
+                                      limit_train_batches=config.toy_run,
+                                      limit_test_batches=config.toy_run,
+                                      limit_val_batches=config.toy_run)
+
+                    # Train model
+                    trainer.fit(model, dm)
+
+                    # Load checkpoint with best dev accuracy
+                    checkpoint_callback.best_model_path
+
+                    # Evaluate on test set
+                    result = trainer.test()
+                    print('test results on task={} for model with penalty_fn={}, lambda={}: '.format(
+                        config.task, penalty_fn, lambeda))
+                    print(result)
+
+    end = time.time()
+    print("\n -------------- Finished running experiments --------------")
+    elapsed = end - start
+    print('Required time to run all experiments: {} seconds '.format(elapsed))
 
 if __name__ == '__main__':
 
@@ -288,16 +364,8 @@ if __name__ == '__main__':
                         help='specifies global seed')
     parser.add_argument('--task', default='occupation', type=str,
                         help='str to specify task. Args: [occupation, pronoun, sstwiki]')
-    parser.add_argument('--anon', default=False, type=bool,
-                        help='arg to toggle anonymized impermissible tokens')
-    parser.add_argument('--penalize', default=True, type=bool,
-                        help='flag to toggle penalisation of attn to impermissible words')
-    parser.add_argument('--penalty_fn', default='mean', type=str,
-                        help='penalty fn [options: "mean" or "max" ')
-    parser.add_argument('--lambeda', default=1, type=float,
-                        help='penalty coefficient')
 
-    # Learning specific args
+    # Optimization specific args
     batch_size = 32 if device_count() > 0 else 16
     parser.add_argument('--batch_size', default=batch_size, type=int,
                         help='no. of sentences sampled per pass')
@@ -325,6 +393,9 @@ if __name__ == '__main__':
     parser.add_argument('--log_every', default=log_every, type=int,
                         help='number of steps between loggings')
 
+    #TODO: add config arg to turn off progress bar if GPU is detected, since this messes up the SLURM file
+
+
     # Auxiliary args
     parser.add_argument('--debug', default=False, type=bool,
                         help='toggle elaborate torch errors')
@@ -332,7 +403,7 @@ if __name__ == '__main__':
                         help='set no of batches per datasplit per epoch (helpful for debugging)')
     config = parser.parse_args()
 
-    # if toy_run is enabled, set a batch size of 1 for quicker epochs
+    # if toy_run is enabled, set a batch size of 8 for quicker epochs
     config.batch_size = 8 if config.toy_run is not None else config.batch_size
 
     main(config)

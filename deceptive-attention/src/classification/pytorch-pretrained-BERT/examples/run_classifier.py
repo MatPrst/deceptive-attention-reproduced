@@ -23,7 +23,7 @@ import logging
 import os
 import random
 import sys
-sys.path.append(os.path.join(os.getcwd(), 'pytorch-pretrained-BERT'))
+#sys.path.append(os.path.join(os.getcwd(), 'pytorch-pretrained-BERT'))
 
 import numpy as np
 import torch
@@ -671,7 +671,7 @@ def main():
             nb_tr_examples, nb_tr_steps = 0, 0
             
             if epoch > 0:
-                for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
+                for step, batch in enumerate(train_dataloader):
                     batch = tuple(t.to(device) for t in batch)
                     input_ids, input_mask, segment_ids, label_ids = batch
 
@@ -796,7 +796,7 @@ def run_evaluation(args, processor, label_list, tokenizer, output_mode, epoch,
 
         tmp_vnfs = [0., 0., 0.]
 
-        for input_ids, input_mask, segment_ids, label_ids in tqdm(eval_dataloader, desc="Evaluating"):
+        for input_ids, input_mask, segment_ids, label_ids in eval_dataloader:
             input_ids = input_ids.to(device)
             input_mask = input_mask.to(device)
             segment_ids = segment_ids.to(device)

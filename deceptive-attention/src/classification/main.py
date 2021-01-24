@@ -136,11 +136,6 @@ set_seed(SEED)
 TRAIN, DEV, TEST, N_WORDS, I2W, I2T, N_TAGS = read_data(TASK_NAME, MODEL_TYPE, LOGGER, CLIP_VOCAB, BLOCK_WORDS, TO_ANON,
                                                         VOCAB_SIZE, USE_BLOCK_FILE, USE_ATTN_FILE)
 
-# assigning updated vocabs to global ones
-# W2I = w2i
-# T2I = t2i
-
-
 if DEBUG:
     TRAIN = TRAIN[:100]
     DEV = DEV[:100]

@@ -2,9 +2,23 @@ from collections import defaultdict
 
 import util
 
+DATA_PREFIX = "data/"
 
-def read_data(use_block_file, use_attention_file, prefix, w2i, w2c, t2i, unk, vocab_size,
-              to_anon, task_name, block_words, clip_vocab, model_type, logger=None):
+
+def initialize_vocab():
+    w2i = defaultdict(lambda: len(w2i))
+    w2c = defaultdict(lambda: 0.0)  # word to count
+    t2i = defaultdict(lambda: len(t2i))
+    unk = w2i["<unk>"]
+
+    return w2i, w2c, t2i, unk
+
+
+def read_data(task_name, model_type, logger, clip_vocab=False, block_words=None, to_anon=False, vocab_size=20000,
+              use_block_file=False, use_attention_file=False):
+    w2i, w2c, t2i, unk = initialize_vocab()
+
+    prefix = f"{DATA_PREFIX}{task_name}/"
     train_path = prefix + "train.txt"
     dev_path = prefix + "dev.txt"
     test_path = prefix + "test.txt"
@@ -51,7 +65,14 @@ def read_data(use_block_file, use_attention_file, prefix, w2i, w2c, t2i, unk, vo
     test = list(read_dataset(test_path, w2i, w2c, t2i, vocab_size, unk, to_anon, task_name, block_file=test_block_file,
                              block_words=block_w, attn_file=test_attention_file))
 
-    return train, dev, test, n_words, w2i, t2i
+    # reverse dictionaries
+    i2w = {v: k for k, v in w2i.items()}
+    i2w[unk] = "<unk>"
+    i2t = {v: k for k, v in t2i.items()}
+
+    n_tags = len(t2i)
+
+    return train, dev, test, n_words, i2w, i2t, n_tags
 
 
 def read_dataset(data_file, w2i, w2c, t2i, vocab_size, unk, to_anon, task_name, block_words=None,

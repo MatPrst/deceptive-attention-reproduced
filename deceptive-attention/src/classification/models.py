@@ -1,6 +1,12 @@
 import torch
 from torch import nn
 
+LONG_TYPE = torch.LongTensor
+FLOAT_TYPE = torch.FloatTensor
+if torch.cuda.is_available():
+    LONG_TYPE = torch.cuda.LongTensor
+    FLOAT_TYPE = torch.cuda.FloatTensor
+
 
 class EmbAttModel(nn.Module):
     def __init__(self, vocab_size, emb_dim, out_dim):
@@ -10,6 +16,18 @@ class EmbAttModel(nn.Module):
         self.embedding_layer = nn.Embedding(vocab_size, emb_dim)
         self.weight_layer = nn.Linear(emb_dim, 1)
         self.linear = nn.Linear(emb_dim, out_dim)
+
+    def predict_probabilities(self, data_instance):
+        idx, words, block_ids, attn_orig, tag = data_instance
+
+        words_t = torch.tensor([words]).type(LONG_TYPE)
+        tag_t = torch.tensor([tag]).type(LONG_TYPE)
+
+        block_ids_t = torch.tensor([block_ids]).type(FLOAT_TYPE)
+
+        pred, _ = self.forward(words_t, block_ids_t)
+
+        return [pred, 1 - pred]
 
     def forward(self, inp, block_ids=None):  # shape(inp)       : B x W
         emb_output = self.embedding_layer(inp)  # shape(emb_output): B x W x emd_dim

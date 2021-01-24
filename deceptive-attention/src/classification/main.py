@@ -3,14 +3,17 @@ import os
 import random
 import time
 
-import torch.nn as nn
-from tabulate import tabulate
 from torch.utils.tensorboard import SummaryWriter
 
 from data_utils import *
 from log_utils import setup_logger
 from train_utils import *
-from train_utils import LONG_TYPE, FLOAT_TYPE
+
+LONG_TYPE = torch.LongTensor
+FLOAT_TYPE = torch.FloatTensor
+if torch.cuda.is_available():
+    LONG_TYPE = torch.cuda.LongTensor
+    FLOAT_TYPE = torch.cuda.FloatTensor
 
 # PARSING STUFF FROM COMMANDLINE
 
@@ -87,7 +90,6 @@ params = vars(parser.parse_args())
 SEED = params['seed']
 TENSORBOARD = params['tensorboard_log']
 LOG_PATH = "logs/"
-DATA_MODELS_PATH = "data/models/"
 
 # user specified constants
 C_ENTROPY = params['loss_entropy']
@@ -129,156 +131,20 @@ LOGGER.info(f"Seed: {SEED}")
 
 set_seed(SEED)
 
-W2I = defaultdict(lambda: len(W2I))
-W2C = defaultdict(lambda: 0.0)  # word to count
-T2I = defaultdict(lambda: len(T2I))
-UNK = W2I["<unk>"]
-
-
-def evaluate(model, dataset, i2w, i2t, logger=LOGGER, stage='test', attn_stats=False, num_vis=0):
-    logger.info(f"Evaluating on {stage} set.\n")
-
-    # Perform testing
-    test_correct = 0.0
-    test_base_prop = 0.0
-    test_attn_prop = 0.0
-    test_base_emb_norm = 0.0
-    test_attn_emb_norm = 0.0
-    test_base_h_norm = 0.0
-    test_attn_h_norm = 0.0
-
-    example_data = []
-
-    total_loss = 0.0
-    if num_vis > 0 and UNDERSTAND:
-        wts, bias = model.get_linear_wts()
-        logger.info("Weights below")
-        logger.info(wts.detach().cpu().numpy())
-        logger.info("bias below")
-        logger.info(bias.detach().cpu().numpy())
-
-    for idx, words, block_ids, attn_orig, tag in dataset:
-        words_t = torch.tensor([words]).type(LONG_TYPE)
-        tag_t = torch.tensor([tag]).type(LONG_TYPE)
-        if attn_orig is not None:
-            attn_orig = torch.tensor(attn_orig).type(FLOAT_TYPE)
-
-        block_ids_t = torch.tensor([block_ids]).type(FLOAT_TYPE)
-
-        if stage == 'test' and FLOW:
-            pred, attn = model(words_t, block_ids_t)
-        else:
-            pred, attn = model(words_t)
-        attention = attn[0]
-
-        if not FLOW or (stage != 'test'):
-            assert 0.99 < torch.sum(attention).item() < 1.01
-
-        ce_loss = calc_ce_loss(pred, tag_t)
-        entropy_loss = calc_entropy_loss(attention, C_ENTROPY)
-        hammer_loss = calc_hammer_loss(words, attention, block_ids, C_HAMMER)
-        kld_loss = calc_kld_loss(attention, attn_orig, C_KLD)
-
-        assert hammer_loss.item() >= 0.0
-        assert ce_loss.item() >= 0.0
-
-        loss = ce_loss + entropy_loss + hammer_loss
-        total_loss += loss.item()
-
-        word_embeddings = model.get_embeddings(words_t)
-        word_embeddings = word_embeddings[0].detach().cpu().numpy()
-        assert len(words) == len(word_embeddings)
-
-        final_states = model.get_final_states(words_t)
-        final_states = final_states[0].detach().cpu().numpy()
-        assert len(words) == len(final_states)
-
-        predict = pred[0].argmax().item()
-        if predict == tag:
-            test_correct += 1
-
-        if idx < num_vis:
-
-            attn_scores = attn[0].detach().cpu().numpy()
-
-            example_data.append([[i2w[w] for w in words], attn_scores, i2t[predict], i2t[tag]])
-
-            if UNDERSTAND:
-                headers = ['words', 'attn'] + ['e' + str(i + 1) for i in range(EMB_SIZE)]
-                tabulated_list = []
-                for j in range(len(words)):
-                    temp_list = [i2w[words[j]], attn_scores[j]]
-                    for emb in word_embeddings[j]:
-                        temp_list.append(emb)
-                    tabulated_list.append(temp_list)
-                logger.info(tabulate(tabulated_list, headers=headers))
-
-        base_prop, attn_prop = quantify_attention(words, attention.detach().cpu().numpy(), block_ids)
-        base_emb_norm, attn_emb_norm = quantify_norms(words, word_embeddings, block_ids)
-        base_h_norm, attn_h_norm = quantify_norms(words, final_states, block_ids)
-
-        test_base_prop += base_prop
-        test_attn_prop += attn_prop
-
-        test_base_emb_norm += base_emb_norm
-        test_attn_emb_norm += attn_emb_norm
-
-        test_base_h_norm += base_h_norm
-        test_attn_h_norm += attn_h_norm
-
-    '''
-    outfile_name = "examples/" + TASK_NAME + "_" + MODEL_TYPE + "_hammer=" + str(C_HAMMER) \
-         +"_kld=" + str(C_KLD) + "_seed=" + str(SEED) + "_iter=" +  str(iter) + ".pickle"
-
-    pickle.dump(example_data, open(outfile_name, 'wb'))
-    '''
-
-    if attn_stats:
-        logger.info("in %s set base_ratio = %.8f, attention_ratio = %.14f" % (
-            stage,
-            test_base_prop / len(dataset),
-            test_attn_prop / len(dataset)))
-
-        logger.info("in %s set base_emb_norm = %.4f, attn_emb_norm = %.4f" % (
-            stage,
-            test_base_emb_norm / len(dataset),
-            test_attn_emb_norm / len(dataset)))
-
-        logger.info("in %s set base_h_norm = %.4f, attn_h_norm = %.4f\n" % (
-            stage,
-            test_base_h_norm / len(dataset),
-            test_attn_h_norm / len(dataset)))
-
-    accuracy = test_correct / len(dataset)
-    loss = total_loss / len(dataset)
-
-    logger.info(f"Stage {stage}: acc = {accuracy * 100.:.2f}")
-    logger.info(f"Stage {stage}: loss = {loss:.8f}\n")
-
-    return accuracy, loss
-
-
 # READING THE DATA
 
-PREFIX = "data/" + TASK_NAME + "/"
-TRAIN, DEV, TEST, N_WORDS, W2I, T2I = read_data(USE_BLOCK_FILE, USE_ATTN_FILE, PREFIX, W2I, W2C, T2I, UNK, VOCAB_SIZE,
-                                                TO_ANON, TASK_NAME, VOCAB_SIZE, BLOCK_WORDS, CLIP_VOCAB, MODEL_TYPE)
+TRAIN, DEV, TEST, N_WORDS, I2W, I2T, N_TAGS = read_data(TASK_NAME, MODEL_TYPE, LOGGER, CLIP_VOCAB, BLOCK_WORDS, TO_ANON,
+                                                        VOCAB_SIZE, USE_BLOCK_FILE, USE_ATTN_FILE)
 
 # assigning updated vocabs to global ones
 # W2I = w2i
 # T2I = t2i
 
+
 if DEBUG:
     TRAIN = TRAIN[:100]
     DEV = DEV[:100]
     TEST = TEST[:100]
-
-# CREATE REVERSE DICTS
-I2W = {v: k for k, v in W2I.items()}
-I2W[UNK] = "<unk>"
-I2T = {v: k for k, v in T2I.items()}
-
-N_TAGS = len(T2I)
 
 LOGGER.info(f"The vocabulary size is {N_WORDS}")
 
@@ -288,7 +154,8 @@ optimizer = torch.optim.Adam(current_model.parameters())
 
 LOGGER.info(f"\nEvaluating without any training ...")
 LOGGER.info(f"ITER: {0}")
-_, _ = evaluate(current_model, TEST, I2W, I2T, stage='test', attn_stats=True, num_vis=0)
+_, _ = evaluate(current_model, TEST, I2W, I2T, C_ENTROPY, C_HAMMER, C_KLD, EMB_SIZE, UNDERSTAND,
+                FLOW, LOGGER, stage='test', attn_stats=True, num_vis=0)
 
 WRITER = None
 if TENSORBOARD:
@@ -368,9 +235,12 @@ for ITER in range(1, NUM_EPOCHS + 1):
         % (ITER, avg_train_loss, avg_train_ce_loss, avg_train_entropy_loss, avg_train_hammer_loss, avg_train_kld_loss,
            epoch_duration))
 
-    train_acc, train_loss = evaluate(current_model, TRAIN, I2W, I2T, stage='train')
-    dev_acc, dev_loss = evaluate(current_model, DEV, I2W, I2T, stage='dev', attn_stats=True)
-    test_acc, test_loss = evaluate(current_model, TEST, I2W, I2T, stage='test', attn_stats=True, num_vis=NUM_VIS)
+    train_acc, train_loss = evaluate(current_model, TRAIN, I2W, I2T, C_ENTROPY, C_HAMMER, C_KLD, EMB_SIZE,
+                                     logger=LOGGER, stage='train')
+    dev_acc, dev_loss = evaluate(current_model, DEV, I2W, I2T, C_ENTROPY, C_HAMMER, C_KLD, EMB_SIZE,
+                                 logger=LOGGER, stage='dev', attn_stats=True)
+    test_acc, test_loss = evaluate(current_model, TEST, I2W, I2T, C_ENTROPY, C_HAMMER, C_KLD, EMB_SIZE,
+                                   logger=LOGGER, stage='test', attn_stats=True, num_vis=NUM_VIS)
 
     if WRITER is not None:
         # Training metrics
@@ -398,13 +268,11 @@ for ITER in range(1, NUM_EPOCHS + 1):
         if TO_DUMP_ATTN:
             # log.pr_bmagenta("dumping attention maps")
             LOGGER.info("dumping attention maps")
-            dump_attention_maps(current_model, TRAIN, PREFIX + "train.txt.attn." + MODEL_TYPE)
-            dump_attention_maps(current_model, DEV, PREFIX + "dev.txt.attn." + MODEL_TYPE)
-            dump_attention_maps(current_model, TEST, PREFIX + "test.txt.attn." + MODEL_TYPE)
+            dump_attention_maps(current_model, TRAIN, DATA_PREFIX + "train.txt.attn." + MODEL_TYPE)
+            dump_attention_maps(current_model, DEV, DATA_PREFIX + "dev.txt.attn." + MODEL_TYPE)
+            dump_attention_maps(current_model, TEST, DATA_PREFIX + "test.txt.attn." + MODEL_TYPE)
 
     LOGGER.info(f"iter {ITER}: best test accuracy = {best_test_accuracy:0.4f} attained after epoch = {best_epoch}")
 
     # save the trained model
-    model_path = f"{DATA_MODELS_PATH}model+{MODEL_TYPE}_task={TASK_NAME}_epoch={best_epoch}_seed={str(SEED)}_hammer=" \
-                 f"{C_HAMMER:0.2f}_rand-entropy={C_ENTROPY:0.2f}.pt"
-    torch.save(current_model.state_dict(), model_path)
+    torch.save(current_model.state_dict(), get_model_path(C_ENTROPY, C_HAMMER, best_epoch, MODEL_TYPE, SEED, TASK_NAME))

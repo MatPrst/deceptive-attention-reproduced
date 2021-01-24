@@ -392,7 +392,7 @@ if __name__ == '__main__':
     accelerator = None if device_count() > 0 else None
     parser.add_argument('--accelerator', default=accelerator)
 
-    num_workers = os.cpu_count() if device_count() > 0 else 1
+    num_workers = 12 if device_count() > 0 else 1
     parser.add_argument('--num_workers', default=num_workers, type=int,
                         help='no. of workers for DataLoaders')
 

@@ -63,7 +63,7 @@ def dump_attention_maps(model, dataset, filename):
 
     dataset = sorted(dataset, key=lambda x: x[0])
     for _, words, _, _, _ in dataset:
-        words_t = torch.tensor([words]).type(type)
+        words_t = torch.tensor([words]).type(LONG_TYPE)
         _, attn = model(words_t)
         attention = attn[0].detach().cpu().numpy()
 

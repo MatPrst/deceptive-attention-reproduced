@@ -198,7 +198,7 @@ def read_dataset(data_file, block_words=None, block_file=None, attn_file=None, c
 
 
 def evaluate(model, dataset, stage='test', attn_stats=False, num_vis=0):
-    logger.info(f"evaluating on {stage} set")
+    logger.info(f"Evaluating on {stage} set.\n")
 
     # Perform testing
     test_correct = 0.0
@@ -297,19 +297,19 @@ def evaluate(model, dataset, stage='test', attn_stats=False, num_vis=0):
 
     if attn_stats:
         logger.info("iter %r: in %s set base_ratio = %.8f, attention_ratio = %.14f" % (
-            iter,
+            ITER,
             stage,
             test_base_prop / len(dataset),
             test_attn_prop / len(dataset)))
 
         logger.info("iter %r: in %s set base_emb_norm = %.4f, attn_emb_norm = %.4f" % (
-            iter,
+            ITER,
             stage,
             test_base_emb_norm / len(dataset),
             test_attn_emb_norm / len(dataset)))
 
-        logger.info("iter %r: in %s set base_h_norm = %.4f, attn_h_norm = %.4f" % (
-            iter,
+        logger.info("iter %r: in %s set base_h_norm = %.4f, attn_h_norm = %.4f\n" % (
+            ITER,
             stage,
             test_base_h_norm / len(dataset),
             test_attn_h_norm / len(dataset)))
@@ -318,7 +318,7 @@ def evaluate(model, dataset, stage='test', attn_stats=False, num_vis=0):
     loss = total_loss / len(dataset)
 
     logger.info(f"Stage {stage}: acc = {accuracy * 100.:.2f}")
-    logger.info(f"Stage {stage}: loss = {loss:.8f}")
+    logger.info(f"Stage {stage}: loss = {loss:.8f}\n")
 
     return accuracy, loss
 
@@ -397,16 +397,14 @@ if torch.cuda.is_available():
 calc_ce_loss = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(current_model.parameters())
 
-logger.info("evaluating without any training ...")
-
-logger.info(f"Evaluating at epoch {0}.")
+logger.info(f"\nEvaluating without any training at epoch {0} ...")
 _, _ = evaluate(current_model, test, stage='test', attn_stats=True, num_vis=0)
 
 writer = None
 if TENSORBOARD:
     writer = SummaryWriter(os.path.join(LOG_PATH, "tensorboard"))
 
-logger.info("starting to train")
+logger.info("Starting to train. \n")
 
 best_dev_accuracy = 0.
 best_dev_loss = np.inf

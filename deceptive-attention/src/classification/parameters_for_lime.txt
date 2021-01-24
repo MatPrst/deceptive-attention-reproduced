@@ -1,0 +1,1 @@
+--num-epochs 5 --num-visualize 100 --loss-hammer 0.0 --model emb-att --block-words he she her his him himself herself hers mr mrs ms mr. mrs. ms. --task occupation-classification --clip-vocab --seed 1

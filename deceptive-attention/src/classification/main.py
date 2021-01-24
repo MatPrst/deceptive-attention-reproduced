@@ -296,20 +296,17 @@ def evaluate(model, dataset, stage='test', attn_stats=False, num_vis=0):
     '''
 
     if attn_stats:
-        logger.info("iter %r: in %s set base_ratio = %.8f, attention_ratio = %.14f" % (
-            ITER,
+        logger.info("in %s set base_ratio = %.8f, attention_ratio = %.14f" % (
             stage,
             test_base_prop / len(dataset),
             test_attn_prop / len(dataset)))
 
-        logger.info("iter %r: in %s set base_emb_norm = %.4f, attn_emb_norm = %.4f" % (
-            ITER,
+        logger.info("in %s set base_emb_norm = %.4f, attn_emb_norm = %.4f" % (
             stage,
             test_base_emb_norm / len(dataset),
             test_attn_emb_norm / len(dataset)))
 
-        logger.info("iter %r: in %s set base_h_norm = %.4f, attn_h_norm = %.4f\n" % (
-            ITER,
+        logger.info("in %s set base_h_norm = %.4f, attn_h_norm = %.4f\n" % (
             stage,
             test_base_h_norm / len(dataset),
             test_attn_h_norm / len(dataset)))
@@ -397,7 +394,8 @@ if torch.cuda.is_available():
 calc_ce_loss = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(current_model.parameters())
 
-logger.info(f"\nEvaluating without any training at epoch {0} ...")
+logger.info(f"\nEvaluating without any training ...")
+logger.info(f"ITER: {0}")
 _, _ = evaluate(current_model, test, stage='test', attn_stats=True, num_vis=0)
 
 writer = None
@@ -412,6 +410,8 @@ best_test_accuracy = 0.
 best_epoch = 0
 
 for ITER in range(1, NUM_EPOCHS + 1):
+    logger.info(f"ITER: {ITER}")
+
     random.shuffle(train)
     train_loss = 0.0
     train_ce_loss = 0.0

@@ -2,7 +2,7 @@
 
 #SBATCH --partition=gpu_titanrtx_shared_course
 #SBATCH --gres=gpu:1
-#SBATCH --job-name=FACT_BERT
+#SBATCH --job-name=fact_bert
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=3
 #SBATCH --time=05:00:00
@@ -10,14 +10,12 @@
 #SBATCH --output=job_outputs/slurm_array_%A.out
 
 module purge
-module load 2019
+module load 2020
 module load Python
 module load Anaconda3
 
-# Your job starts in the directory where you call sbatch
-cd $HOME/ard/FACT/deceptive-attention/src/classification_tasks/
-
 # Activate your environment
+source /home/lgpu0139/.bashrc
 source activate attention2
 
 # Run your code

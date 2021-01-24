@@ -417,6 +417,6 @@ if __name__ == '__main__':
     config = parser.parse_args()
 
     # if toy_run is enabled, set a batch size of 8 for quicker epochs
-    config.batch_size = 8 if config.toy_run is not None else config.batch_size
+    config.batch_size = 8 if config.toy_run is not 1.0  else config.batch_size
 
     main(config)

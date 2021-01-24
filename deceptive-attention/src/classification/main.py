@@ -118,6 +118,9 @@ FLOW = params['flow']
 CLIP_VOCAB = params['clip_vocab']
 VOCAB_SIZE = params['vocab_size']
 
+# create required folders if not present
+os.makedirs(LOG_PATH, exist_ok=True)
+
 logger = setup_logger(LOG_PATH, f"task={TASK_NAME}__model={MODEL_TYPE}_hammer={C_HAMMER}_seed={SEED}")
 
 logger.info(f"Task: {TASK_NAME}")

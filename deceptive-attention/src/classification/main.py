@@ -225,10 +225,9 @@ for ITER in range(1, NUM_EPOCHS + 1):
     avg_train_hammer_loss = train_hammer_loss / len_train_set
     avg_train_kld_loss = train_kld_loss / len_train_set
 
-    LOGGER.info(
-        "iter %r: train loss=%.4f, ce_loss=%.4f, entropy_loss=%.4f, hammer_loss=%.4f, kld_loss==%.4f, time=%.2fs"
-        % (ITER, avg_train_loss, avg_train_ce_loss, avg_train_entropy_loss, avg_train_hammer_loss, avg_train_kld_loss,
-           epoch_duration))
+    LOGGER.info("train loss=%.4f, ce_loss=%.4f, entropy_loss=%.4f, hammer_loss=%.4f, kld_loss==%.4f, time=%.2fs"
+                % (avg_train_loss, avg_train_ce_loss, avg_train_entropy_loss, avg_train_hammer_loss, avg_train_kld_loss,
+                   epoch_duration))
 
     train_acc, train_loss = evaluate(current_model, TRAIN, I2W, I2T, C_ENTROPY, C_HAMMER, C_KLD, EMB_SIZE,
                                      logger=LOGGER, stage='train')
@@ -267,7 +266,8 @@ for ITER in range(1, NUM_EPOCHS + 1):
             dump_attention_maps(current_model, DEV, DATA_PREFIX + "dev.txt.attn." + MODEL_TYPE)
             dump_attention_maps(current_model, TEST, DATA_PREFIX + "test.txt.attn." + MODEL_TYPE)
 
-    LOGGER.info(f"iter {ITER}: best test accuracy = {best_test_accuracy:0.4f} attained after epoch = {best_epoch}")
+    LOGGER.info(f"best test accuracy = {best_test_accuracy:0.4f} attained after epoch = {best_epoch}\n")
 
     # save the trained model
+    LOGGER.info("Saving trained model.\n")
     torch.save(current_model.state_dict(), get_model_path(C_ENTROPY, C_HAMMER, best_epoch, MODEL_TYPE, SEED, TASK_NAME))

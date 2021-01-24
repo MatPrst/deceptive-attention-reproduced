@@ -29,7 +29,6 @@ def read_data(task_name, model_type, logger, clip_vocab=False, block_words=None,
 
     if use_block_file:
         # log.pr_blue("Using block file")
-        print(logger)
         logger.info("Using block file")
 
         train_block_file = f"{prefix}train.txt.block"

@@ -220,8 +220,8 @@ def evaluate(model, dataset, stage='test', attn_stats=False, num_vis=0):
         logger.info(bias.detach().cpu().numpy())
 
     for idx, words, block_ids, attn_orig, tag in dataset:
-        words_t = torch.tensor([words]).type(type)
-        tag_t = torch.tensor([tag]).type(type)
+        words_t = torch.tensor([words]).type(LONG_TYPE)
+        tag_t = torch.tensor([tag]).type(LONG_TYPE)
         if attn_orig is not None:
             attn_orig = torch.tensor(attn_orig).type(FLOAT_TYPE)
 

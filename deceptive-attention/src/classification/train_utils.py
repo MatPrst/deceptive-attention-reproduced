@@ -2,6 +2,8 @@ import numpy as np
 import torch
 from numpy import linalg as la
 
+from models import EmbAttModel, BiLSTMAttModel, BiLSTMModel
+
 LONG_TYPE = torch.LongTensor
 FLOAT_TYPE = torch.FloatTensor
 if torch.cuda.is_available():
@@ -18,6 +20,22 @@ def set_seed(seed):
 
     torch.backends.cudnn.determinstic = True
     torch.backends.cudnn.benchmark = False
+
+
+def get_model(model_type, nwords, emb_size, hid_size, ntags):
+    if model_type == 'emb-att':
+        model = EmbAttModel(nwords, emb_size, ntags)
+    elif model_type == 'emb-lstm-att':
+        model = BiLSTMAttModel(nwords, emb_size, hid_size, ntags)
+    elif model_type == 'no-att-only-lstm':
+        model = BiLSTMModel(nwords, emb_size, hid_size, ntags)
+    else:
+        raise ValueError("model type not compatible")
+
+    if torch.cuda.is_available():
+        model.cuda()
+
+    return model
 
 
 def quantify_attention(ix, p, block_ids):

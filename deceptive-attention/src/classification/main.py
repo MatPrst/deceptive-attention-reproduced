@@ -2,19 +2,18 @@ import argparse
 import os
 import random
 import time
-from collections import defaultdict
 
 import torch.nn as nn
 from tabulate import tabulate
 from torch.utils.tensorboard import SummaryWriter
 
+from data_utils import *
 from log_utils import setup_logger
-from models import EmbAttModel, BiLSTMAttModel, BiLSTMModel
 from train_utils import *
-import util
 from train_utils import LONG_TYPE, FLOAT_TYPE
 
-# parsing stuff from the command line
+# PARSING STUFF FROM COMMANDLINE
+
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
 parser.add_argument('--emb-size', dest='emb_size', type=int, default=128,
@@ -120,84 +119,23 @@ VOCAB_SIZE = params['vocab_size']
 os.makedirs(LOG_PATH, exist_ok=True)
 os.makedirs(DATA_MODELS_PATH, exist_ok=True)
 
-logger = setup_logger(LOG_PATH, f"task={TASK_NAME}__model={MODEL_TYPE}_hammer={C_HAMMER}_seed={SEED}")
-
-logger.info(f"Task: {TASK_NAME}")
-logger.info(f"Model: {MODEL_TYPE}")
-logger.info(f"Coef (hammer): {C_HAMMER:0.2f}")
-logger.info(f"Coef (random-entropy): {C_ENTROPY:0.2f}")
-logger.info(f"Seed: {SEED}")
+# SETUP LOGGING
+LOGGER = setup_logger(LOG_PATH, f"task={TASK_NAME}__model={MODEL_TYPE}_hammer={C_HAMMER}_seed={SEED}")
+LOGGER.info(f"Task: {TASK_NAME}")
+LOGGER.info(f"Model: {MODEL_TYPE}")
+LOGGER.info(f"Coef (hammer): {C_HAMMER:0.2f}")
+LOGGER.info(f"Coef (random-entropy): {C_ENTROPY:0.2f}")
+LOGGER.info(f"Seed: {SEED}")
 
 set_seed(SEED)
 
-w2i = defaultdict(lambda: len(w2i))
-w2c = defaultdict(lambda: 0.0)  # word to count
-t2i = defaultdict(lambda: len(t2i))
-UNK = w2i["<unk>"]
+W2I = defaultdict(lambda: len(W2I))
+W2C = defaultdict(lambda: 0.0)  # word to count
+T2I = defaultdict(lambda: len(T2I))
+UNK = W2I["<unk>"]
 
 
-def read_dataset(data_file, block_words=None, block_file=None, attn_file=None, clip_vocab=False):
-    data_lines = open(data_file, encoding="utf-8").readlines()
-    global w2i
-
-    if clip_vocab:
-        for line in data_lines:
-            tag, words = line.strip().lower().split("\t")
-
-            for word in words.split():
-                w2c[word] += 1.0
-
-        # take only top VOCAB_SIZE words
-        word_freq_list = sorted(w2c.items(), key=lambda x: x[1], reverse=True)[:VOCAB_SIZE - len(w2i)]
-
-        for idx, (word, freq) in enumerate(word_freq_list):
-            temp = w2i[word]  # assign the next available idx
-
-        w2i = defaultdict(lambda: UNK, w2i)
-
-    if block_file is not None:
-        block_lines = open(block_file).readlines()
-        if len(data_lines) != len(block_lines):
-            raise ValueError("num lines in data file does not match w/ block file")
-
-    if attn_file is not None:
-        attn_lines = open(attn_file).readlines()
-        if len(data_lines) != len(attn_lines):
-            raise ValueError("num lines in data file does not match w/ attn file")
-
-    for idx, data_line in enumerate(data_lines):
-        tag, words = data_line.strip().lower().split("\t")
-
-        if TO_ANON:
-            words = util.anonymize(words)
-
-        # populate block ids
-        words = words.strip().split()
-        block_ids = [0 for _ in words]
-        attn_wts = None
-        if block_words is not None:
-            block_ids = [1 if i in block_words else 0 for i in words]
-        elif block_file is not None:
-            block_ids = [int(i) for i in block_lines[idx].strip().split()]
-
-            # in the case of sst-wiki anonymizing means removing
-            if TO_ANON and TASK_NAME == 'sst-wiki':
-                sst_or_wiki = map(int, block_lines[idx].strip().split())
-
-                words = [word for word, block in zip(words, sst_or_wiki) if block == 0]  # select only wiki words
-                block_ids = [i for i in block_ids if i == 0]
-
-        if attn_file is not None:
-            attn_wts = [float(i) for i in attn_lines[idx].strip().split()]
-
-        # check for the right len
-        if len(block_ids) != len(words):
-            raise ValueError("num of block words not equal to words")
-        # done populating
-        yield (idx, [w2i[x] for x in words], block_ids, attn_wts, t2i[tag])
-
-
-def evaluate(model, dataset, stage='test', attn_stats=False, num_vis=0):
+def evaluate(model, dataset, i2w, i2t, logger=LOGGER, stage='test', attn_stats=False, num_vis=0):
     logger.info(f"Evaluating on {stage} set.\n")
 
     # Perform testing
@@ -320,89 +258,43 @@ def evaluate(model, dataset, stage='test', attn_stats=False, num_vis=0):
     return accuracy, loss
 
 
-"""" Reading the data """
-prefix = "data/" + TASK_NAME + "/"
+# READING THE DATA
 
-if USE_BLOCK_FILE:
-    # log.pr_blue("Using block file")
-    logger.info("Using block file")
-    train = list(read_dataset(prefix + "train.txt",
-                              block_file=prefix + "train.txt.block", clip_vocab=CLIP_VOCAB))
-    w2i = defaultdict(lambda: UNK, w2i)
-    nwords = len(w2i) if not CLIP_VOCAB else VOCAB_SIZE
-    t2i = defaultdict(lambda: UNK, t2i)
+PREFIX = "data/" + TASK_NAME + "/"
+TRAIN, DEV, TEST, N_WORDS, W2I, T2I = read_data(USE_BLOCK_FILE, USE_ATTN_FILE, PREFIX, W2I, W2C, T2I, UNK, VOCAB_SIZE,
+                                                TO_ANON, TASK_NAME, VOCAB_SIZE, BLOCK_WORDS, CLIP_VOCAB, MODEL_TYPE)
 
-    dev = list(read_dataset(prefix + "dev.txt",
-                            block_file=prefix + "dev.txt.block"))
-    test = list(read_dataset(prefix + "test.txt",
-                             block_file=prefix + "test.txt.block"))
-elif USE_ATTN_FILE:
-    # log.pr_blue("Using attn file")
-    logger.info("Using attn file")
-    train = list(read_dataset(prefix + "train.txt", block_words=BLOCK_WORDS,
-                              attn_file=prefix + "train.txt.attn." + MODEL_TYPE, clip_vocab=CLIP_VOCAB))
-    w2i = defaultdict(lambda: UNK, w2i)
-    nwords = len(w2i) if not CLIP_VOCAB else VOCAB_SIZE
-    t2i = defaultdict(lambda: UNK, t2i)
-
-    dev = list(read_dataset(prefix + "dev.txt", block_words=BLOCK_WORDS,
-                            attn_file=prefix + "dev.txt.attn." + MODEL_TYPE))
-    test = list(read_dataset(prefix + "test.txt", block_words=BLOCK_WORDS,
-                             attn_file=prefix + "test.txt.attn." + MODEL_TYPE))
-else:
-    if BLOCK_WORDS is None:
-        # log.pr_blue("Vanilla case: no attention manipulation")
-        logger.info("Vanilla case: no attention manipulation")
-    else:
-        # log.pr_blue("Using block words")
-        logger.info("Using block words")
-
-    train = list(read_dataset(prefix + "train.txt", block_words=BLOCK_WORDS, clip_vocab=CLIP_VOCAB))
-    nwords = len(w2i) if not CLIP_VOCAB else VOCAB_SIZE
-    w2i = defaultdict(lambda: UNK, w2i)
-    t2i = defaultdict(lambda: UNK, t2i)
-
-    dev = list(read_dataset(prefix + "dev.txt", block_words=BLOCK_WORDS))
-    test = list(read_dataset(prefix + "test.txt", block_words=BLOCK_WORDS))
+# assigning updated vocabs to global ones
+# W2I = w2i
+# T2I = t2i
 
 if DEBUG:
-    train = train[:100]
-    dev = dev[:100]
-    test = test[:100]
+    TRAIN = TRAIN[:100]
+    DEV = DEV[:100]
+    TEST = TEST[:100]
 
-# Create reverse dicts
-i2w = {v: k for k, v in w2i.items()}
-i2w[UNK] = "<unk>"
-i2t = {v: k for k, v in t2i.items()}
+# CREATE REVERSE DICTS
+I2W = {v: k for k, v in W2I.items()}
+I2W[UNK] = "<unk>"
+I2T = {v: k for k, v in T2I.items()}
 
-ntags = len(t2i)
+N_TAGS = len(T2I)
 
-logger.info(f"The vocabulary size is {nwords}")
+LOGGER.info(f"The vocabulary size is {N_WORDS}")
 
-if MODEL_TYPE == 'emb-att':
-    current_model = EmbAttModel(nwords, EMB_SIZE, ntags)
-elif MODEL_TYPE == 'emb-lstm-att':
-    current_model = BiLSTMAttModel(nwords, EMB_SIZE, HID_SIZE, ntags)
-elif MODEL_TYPE == 'no-att-only-lstm':
-    current_model = BiLSTMModel(nwords, EMB_SIZE, HID_SIZE, ntags)
-else:
-    raise ValueError("model type not compatible")
-
-if torch.cuda.is_available():
-    current_model.cuda()
-
+current_model = get_model(MODEL_TYPE, N_WORDS, EMB_SIZE, HID_SIZE, N_TAGS)
 calc_ce_loss = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(current_model.parameters())
 
-logger.info(f"\nEvaluating without any training ...")
-logger.info(f"ITER: {0}")
-_, _ = evaluate(current_model, test, stage='test', attn_stats=True, num_vis=0)
+LOGGER.info(f"\nEvaluating without any training ...")
+LOGGER.info(f"ITER: {0}")
+_, _ = evaluate(current_model, TEST, I2W, I2T, stage='test', attn_stats=True, num_vis=0)
 
-writer = None
+WRITER = None
 if TENSORBOARD:
-    writer = SummaryWriter(os.path.join(LOG_PATH, "tensorboard"))
+    WRITER = SummaryWriter(os.path.join(LOG_PATH, "tensorboard"))
 
-logger.info("Starting to train. \n")
+LOGGER.info("Starting to train. \n")
 
 best_dev_accuracy = 0.
 best_dev_loss = np.inf
@@ -410,9 +302,9 @@ best_test_accuracy = 0.
 best_epoch = 0
 
 for ITER in range(1, NUM_EPOCHS + 1):
-    logger.info(f"ITER: {ITER}")
+    LOGGER.info(f"ITER: {ITER}")
 
-    random.shuffle(train)
+    random.shuffle(TRAIN)
     train_loss = 0.0
     train_ce_loss = 0.0
     train_entropy_loss = 0.0
@@ -420,7 +312,7 @@ for ITER in range(1, NUM_EPOCHS + 1):
     train_kld_loss = 0.0
 
     start = time.time()
-    for num, (idx, words_orig, block_ids, attn_orig, tag) in enumerate(train):
+    for num, (idx, words_orig, block_ids, attn_orig, tag) in enumerate(TRAIN):
 
         words = torch.tensor([words_orig]).type(LONG_TYPE)
         tag = torch.tensor([tag]).type(LONG_TYPE)
@@ -463,33 +355,36 @@ for ITER in range(1, NUM_EPOCHS + 1):
 
     epoch_duration = time.time() - start
 
-    logger.info("iter %r: train loss=%.4f, ce_loss=%.4f, entropy_loss=%.4f,"
-                "hammer_loss=%.4f, kld_loss==%.4f, time=%.2fs" % (
-                    ITER,
-                    train_loss / len(train),
-                    train_ce_loss / len(train),
-                    train_entropy_loss / len(train),
-                    train_hammer_loss / len(train),
-                    train_kld_loss / len(train),
-                    epoch_duration))
+    len_train_set = len(TRAIN)
 
-    train_acc, train_loss = evaluate(current_model, train, stage='train')
-    dev_acc, dev_loss = evaluate(current_model, dev, stage='dev', attn_stats=True)
-    test_acc, test_loss = evaluate(current_model, test, stage='test', attn_stats=True, num_vis=NUM_VIS)
+    avg_train_loss = train_loss / len_train_set
+    avg_train_ce_loss = train_ce_loss / len_train_set
+    avg_train_entropy_loss = train_entropy_loss / len_train_set
+    avg_train_hammer_loss = train_hammer_loss / len_train_set
+    avg_train_kld_loss = train_kld_loss / len_train_set
 
-    if writer is not None:
+    LOGGER.info(
+        "iter %r: train loss=%.4f, ce_loss=%.4f, entropy_loss=%.4f, hammer_loss=%.4f, kld_loss==%.4f, time=%.2fs"
+        % (ITER, avg_train_loss, avg_train_ce_loss, avg_train_entropy_loss, avg_train_hammer_loss, avg_train_kld_loss,
+           epoch_duration))
+
+    train_acc, train_loss = evaluate(current_model, TRAIN, I2W, I2T, stage='train')
+    dev_acc, dev_loss = evaluate(current_model, DEV, I2W, I2T, stage='dev', attn_stats=True)
+    test_acc, test_loss = evaluate(current_model, TEST, I2W, I2T, stage='test', attn_stats=True, num_vis=NUM_VIS)
+
+    if WRITER is not None:
         # Training metrics
-        writer.add_scalar("Loss/train", train_loss / len(train), ITER)
-        writer.add_scalar("CE_loss/train", train_ce_loss / len(train), ITER)
-        writer.add_scalar("Entropy_loss/train", train_entropy_loss / len(train), ITER)
-        writer.add_scalar("Hammer_loss/train", train_hammer_loss / len(train), ITER)
-        writer.add_scalar("KLD_loss/train", train_kld_loss / len(train), ITER)
-        writer.add_scalar("Duration", epoch_duration, ITER)
+        WRITER.add_scalar("Loss/train", avg_train_loss, ITER)
+        WRITER.add_scalar("CE_loss/train", avg_train_ce_loss, ITER)
+        WRITER.add_scalar("Entropy_loss/train", avg_train_entropy_loss, ITER)
+        WRITER.add_scalar("Hammer_loss/train", avg_train_hammer_loss, ITER)
+        WRITER.add_scalar("KLD_loss/train", avg_train_kld_loss, ITER)
+        WRITER.add_scalar("Duration", epoch_duration, ITER)
 
         # Evaluation metrics
-        writer.add_scalar("Accuracy/train", train_acc, ITER)
-        writer.add_scalar("Accuracy/dev", dev_acc, ITER)
-        writer.add_scalar("Accuracy/test", test_acc, ITER)
+        WRITER.add_scalar("Accuracy/train", train_acc, ITER)
+        WRITER.add_scalar("Accuracy/dev", dev_acc, ITER)
+        WRITER.add_scalar("Accuracy/test", test_acc, ITER)
 
     if ((not USE_LOSS) and dev_acc > best_dev_accuracy) or (USE_LOSS and dev_loss < best_dev_loss):
 
@@ -502,14 +397,14 @@ for ITER in range(1, NUM_EPOCHS + 1):
 
         if TO_DUMP_ATTN:
             # log.pr_bmagenta("dumping attention maps")
-            logger.info("dumping attention maps")
-            dump_attention_maps(current_model, train, prefix + "train.txt.attn." + MODEL_TYPE)
-            dump_attention_maps(current_model, dev, prefix + "dev.txt.attn." + MODEL_TYPE)
-            dump_attention_maps(current_model, test, prefix + "test.txt.attn." + MODEL_TYPE)
+            LOGGER.info("dumping attention maps")
+            dump_attention_maps(current_model, TRAIN, PREFIX + "train.txt.attn." + MODEL_TYPE)
+            dump_attention_maps(current_model, DEV, PREFIX + "dev.txt.attn." + MODEL_TYPE)
+            dump_attention_maps(current_model, TEST, PREFIX + "test.txt.attn." + MODEL_TYPE)
 
-    logger.info(f"iter {ITER}: best test accuracy = {best_test_accuracy:0.4f} attained after epoch = {best_epoch}")
+    LOGGER.info(f"iter {ITER}: best test accuracy = {best_test_accuracy:0.4f} attained after epoch = {best_epoch}")
 
     # save the trained model
-    model_path = f"{DATA_MODELS_PATH}model_{MODEL_TYPE}task_{TASK_NAME}epoch_{best_epoch}_seed={str(SEED)}_hammer=" \
+    model_path = f"{DATA_MODELS_PATH}model+{MODEL_TYPE}_task={TASK_NAME}_epoch={best_epoch}_seed={str(SEED)}_hammer=" \
                  f"{C_HAMMER:0.2f}_rand-entropy={C_ENTROPY:0.2f}.pt"
     torch.save(current_model.state_dict(), model_path)

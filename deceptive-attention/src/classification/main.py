@@ -129,7 +129,7 @@ LOGGER.info(f"Seed: {SEED}")
 set_seed(SEED)
 
 # READING THE DATA
-
+logger.info(f"Reading data:\n\t{TASK_NAME}")
 TRAIN, DEV, TEST, VOCABULARY = read_data(TASK_NAME, MODEL_TYPE, LOGGER, CLIP_VOCAB, BLOCK_WORDS, TO_ANON, VOCAB_SIZE,
                                          USE_BLOCK_FILE, USE_ATTN_FILE)
 

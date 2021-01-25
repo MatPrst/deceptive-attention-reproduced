@@ -37,9 +37,8 @@ class Vocabulary(object):
         self.n_tags = len(self.t2i)
 
 
-def read_data(task_name, model_type, logger, clip_vocab=False, block_words=None, to_anon=False, vocab_size=20000,
+def read_data(task_name, model_type, logger=None, clip_vocab=False, block_words=None, to_anon=False, vocab_size=20000,
               use_block_file=False, use_attention_file=False):
-    logger.info(f"Reading data:\n\t{task_name}")
 
     vocabulary = Vocabulary(clip_vocab, vocab_size)
 
@@ -54,14 +53,16 @@ def read_data(task_name, model_type, logger, clip_vocab=False, block_words=None,
 
     if use_block_file:
         # log.pr_blue("Using block file")
-        logger.info("Using block file.")
+        if logger is not None:
+            logger.info("Using block file.")
 
         train_block_file = f"{prefix}train.txt.block"
         dev_block_file = f"{prefix}dev.txt.block"
         test_block_file = f"{prefix}test.txt.block"
     elif use_attention_file:
         # log.pr_blue("Using attn file")
-        logger.info("Using attention file.")
+        if logger is not None:
+            logger.info("Using attention file.")
 
         block_w = block_words
         train_attention_file = f"{prefix}train.txt.attn.{model_type}"
@@ -70,10 +71,12 @@ def read_data(task_name, model_type, logger, clip_vocab=False, block_words=None,
     else:
         if block_words is None:
             # log.pr_blue("Vanilla case: no attention manipulation")
-            logger.info("Vanilla case: no attention manipulation")
+            if logger is not None:
+                logger.info("Vanilla case: no attention manipulation")
         else:
             # log.pr_blue("Using block words")
-            logger.info(f"Using block words:\n\t{block_words}")
+            if logger is not None:
+                logger.info(f"Using block words:\n\t{block_words}")
 
         block_w = block_words
 

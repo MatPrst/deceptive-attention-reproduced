@@ -34,17 +34,15 @@ def set_seed(seed):
     torch.backends.cudnn.benchmark = False
 
 
-def get_trained_model(model_path, vocabulary, emb_size=128, hid_size=64):
-    model_type = model_path[model_path.find('model='):model_path.find('_task=')].strip()
-    return get_trained_model(model_path, model_type, vocabulary, emb_size, hid_size)
-
-
 def get_trained_model(model_type, task_name, epoch, seed, loss_config, vocabulary, emb_size=128, hid_size=64):
     model_path = get_model_path(loss_config, epoch, model_type, seed, task_name)
-    return get_trained_model(model_path, model_type, vocabulary, emb_size, hid_size)
+    return get_trained_model(model_path, vocabulary, model_type, emb_size, hid_size)
 
 
-def get_trained_model(model_path, model_type, vocabulary, emb_size, hid_size):
+def get_trained_model(model_path, vocabulary, model_type=None, emb_size=128, hid_size=64):
+    if model_type is None:
+        model_type = model_path[model_path.find('model='):model_path.find('_task=')].strip()
+
     model = get_model(model_type, vocabulary, emb_size, hid_size)
     map_location = torch.cuda if torch.cuda.is_available() else torch.device('cpu')
     model_object = torch.load(model_path, map_location=map_location)

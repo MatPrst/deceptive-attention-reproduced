@@ -12,3 +12,4 @@ progress_bar: 1
 seed: 42
 task: occupation
 toy_run: 1.0
+warnings: false

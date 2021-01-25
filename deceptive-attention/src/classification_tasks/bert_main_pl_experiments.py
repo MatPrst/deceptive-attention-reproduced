@@ -219,16 +219,21 @@ def get_lowest(path_dict, baseline):
     acc_values = []  # save the dev acc values in a list
     for path in path_dict.keys():  # Iterate over the k paths
 
-        am_value = path[-10:-5]  # Extract the Dev AM score from the path str
+        # Behold the most robustest of parsing technologies known to mankind
+        left_idx = path.find('val_attention_mass=') + len('val_attention_mass=')
+        right_idx = path.find('.ckpt')
+        am_value = path[left_idx:right_idx]
         am_values.append(float(am_value))
 
-        acc_value = path[-34:-30] # Extract the test acc score from the path str
+        left_idx = path.find('val_acc=') + len('val_acc=')
+        right_idx = path.find('-val_attention_mass=')
+        acc_value = path[left_idx:right_idx]
         acc_values.append(float(acc_value))
 
     eligible = [] # keep track of checkpoints whose test accuracies are /geq 0.02
     for i, path in enumerate(path_dict.keys()):
         difference = abs(acc_values[i] - baseline)
-        if difference <= 0.02:
+        if difference <= 0.02 or acc_values[i] > baseline:
             eligible.append(i)
 
     # from all models that are within the 0.02% range, we pick the one with the greatest
@@ -246,7 +251,7 @@ def get_lowest(path_dict, baseline):
             if i == smallest_idx:
                 return path
 
-    # if none of the models are within the 0.02% range we output None
+    # if all of the checkpoints are below the baseline we stick to the best dev acc chkpt
     else:
         print('None of the models are within 2% acc range')
         return None

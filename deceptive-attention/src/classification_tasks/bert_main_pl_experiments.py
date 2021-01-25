@@ -3,6 +3,8 @@ import argparse
 import sys
 import time
 import os
+import warnings
+import logging
 
 # PyTorch modules
 import torch
@@ -211,7 +213,8 @@ class BERTModel(LightningModule):
 
 def main(args):
 
-    print('\n -------------- Classification with BERT -------------- \n')
+    print('\n -------------- Classification with BERT ------------------------------------ \n')
+
 
     # print CLI args
     print('Arguments: ')
@@ -225,7 +228,12 @@ def main(args):
     if config.debug:
         torch.autograd.set_detect_anomaly(True)
 
-    print("\nStandard GPU loading prompt: \n ") if device_count() > 0 else print('')
+    # Turn off GPU available prompts for less cluttered console output (warnings disabled by default)
+    if config.warnings == False:
+
+        warnings.filterwarnings('ignore')
+        # configure logging at the root level of lightning
+        logging.getLogger('lightning').setLevel(0)
 
     ############################# Code for replicating all 7 experiments for a given task ############################
     # time the total duration of the experiments
@@ -238,10 +246,9 @@ def main(args):
         if mode == 'anon':
 
             ############################### Code for replicating anonymization experiment ############################
-            print('\n -------------- Beginning Anonymization experiment for task: {} --------------'.format(config.task))
+            print('\n -------------- Beginning Anonymization experiment for task: {} ------------\n'.format(config.task))
 
             # Define model
-            print("\nStandard transformer warning (which you don't need to worry about):\n")
             model = BERTModel(dropout=config.dropout,
                               lr=config.lr,
                               penalize=False,
@@ -251,6 +258,7 @@ def main(args):
             # Define logger and path
             logger = pl_loggers.TensorBoardLogger('experiment_results/logs/seed_{}/task_{}/anon/'.format(config.seed, config.task))
             logger.log_hyperparams(config)
+
 
             # for the anonymization task, we want to test using the ckpt with the best dev accuracy
             # therefore we define a dedicated chkpt callback that monitors the val_acc metric
@@ -284,14 +292,13 @@ def main(args):
             # load checkpoint with best dev accuracy
             checkpoint_callback.best_model_path
             # evaluate on test set
+            print('Test results on {} with seed {} with anonymization: '.format(config.task, config.seed))
             result = trainer.test()
-            print('results on {} with seed {} with anonymization: '.format(config.task, config.seed))
-            print(result)
 
         if mode == 'adversarial':
 
             ############################### Code for replicating adversarial experiments ###############################
-            print('\n -------------- Beginning adversarial experiments for task: {} --------------'.format(config.task))
+            print('\n -------------- Beginning adversarial experiments for task: {} -------------- \n'.format(config.task))
 
             # for the 'adversarial' models, there are 2 x 3 = 6 possible experiments that need to be ran.
             penalty_fns = ['mean', 'max']
@@ -304,7 +311,6 @@ def main(args):
                 for lambeda in lambdas:
 
                     # Define model
-                    print("\nStandard transformer warning (which you don't need to worry about):\n")
                     model = BERTModel(dropout=config.dropout,
                                        lr=config.lr,
                                        penalize=True,
@@ -316,14 +322,31 @@ def main(args):
                                                             config.seed, config.task, penalty_fn, lambeda))
                     logger.log_hyperparams(config)
 
-                    # Specify checkpoint callback and monitoring metric
-                    checkpoint_callback = ModelCheckpoint(
-                                        monitor='val_acc',
-                                          dirpath='experiment_results/checkpoints/seed_{}/task_{}/penalty_{}_lambda_{}/'.format(
-                                              config.seed, config.task, penalty_fn, lambeda),
-                                          filename='model-{epoch:02d}-{val_acc:.2f}',
-                                          save_top_k=1,
-                                          mode='max', )
+                    # for lambda 0 (the baseline), we checkpoint based on dev accuracy
+                    if lambeda == 0:
+
+                        # Specify checkpoint callback and monitoring metric
+                        checkpoint_callback = ModelCheckpoint(
+                                            monitor='val_acc',
+                                              dirpath='experiment_results/checkpoints/seed_{}/task_{}/penalty_{}_lambda_{}/'.format(
+                                                  config.seed, config.task, penalty_fn, lambeda),
+                                              filename='model-{epoch:02d}-{val_acc:.2f}',
+                                              save_top_k=1,
+                                              mode='max', )
+
+                    # for lambda 0.1 & 1.0 (the 'adversarial' models), we checkpoint based on the dev attention mass
+                    else:
+
+                        print('calling the other callback since lambda is {} now'.format(lambeda))
+
+                        # Specify checkpoint callback and monitoring metric
+                        checkpoint_callback = ModelCheckpoint(
+                                            monitor='val_attention_mass',
+                                            dirpath='experiment_results/checkpoints/seed_{}/task_{}/penalty_{}_lambda_{}/'.format(
+                                                config.seed, config.task, penalty_fn, lambeda),
+                                            filename='model-{epoch:02d}-{val_acc:.2f}',
+                                            save_top_k=1,
+                                            mode='min', )
 
                     # Initialise DataModule
                     dm = GenericDataModule(task=config.task,
@@ -352,10 +375,9 @@ def main(args):
                     checkpoint_callback.best_model_path
 
                     # Evaluate on test set
-                    result = trainer.test()
-                    print('test results on task={} for model with penalty_fn={}, lambda={}: '.format(
+                    print('Test results on task={} for model with penalty_fn={}, lambda={}: '.format(
                         config.task, penalty_fn, lambeda))
-                    print(result)
+                    result = trainer.test()
 
     end = time.time()
     print("\n -------------- Finished running experiments --------------")
@@ -373,7 +395,7 @@ if __name__ == '__main__':
                         help='str to specify task. Args: [occupation, pronoun, sstwiki]')
 
     # Optimization specific args
-    batch_size = 32 if device_count() > 0 else 16
+    batch_size = 32 if device_count() > 0 else 16 # some CLI args are assigned default values <-> a GPU is available
     parser.add_argument('--batch_size', default=batch_size, type=int,
                         help='no. of sentences sampled per pass')
     parser.add_argument('--max_epochs', default=10, type=int,
@@ -383,7 +405,7 @@ if __name__ == '__main__':
     parser.add_argument('--dropout', default=0.3, type=float,
                         help='hidden layer dropout prob')
     parser.add_argument('--max_length', default=180, type=int,
-                        help='max no of tokens for tokenizer (default is enough for all tasks')
+                        help='max no of tokens for tokenizer (default is enough for all tasks)')
 
     # Torch / lightning specific args
     num_gpus = 1 if device_count() > 0 else None
@@ -400,23 +422,24 @@ if __name__ == '__main__':
     parser.add_argument('--log_every', default=log_every, type=int,
                         help='number of steps between loggings')
 
-    #TODO: add config arg to turn off progress bar if GPU is detected, since this messes up the SLURM file
-
 
     # Auxiliary args
     parser.add_argument('--debug', default=False, type=bool,
                         help='toggle elaborate torch errors')
 
-    parser.add_argument('--toy_run', default=1.0, type=float,
+    toy_run = 1 if device_count() == 0 else 1.0
+    parser.add_argument('--toy_run', default=toy_run, type=float,
                         help='set no of batches per datasplit per epoch (helpful for debugging)')
 
     progress_bar = 0 if device_count() > 0 else 1
     parser.add_argument('--progress_bar', default=progress_bar, type=int,
                         help='lightning progress bar flag. disabled on GPU to keep SLURM output neat')
+    parser.add_argument('--warnings', default=False, type=bool,
+                        help='disable warnings for less cluttered console output')
 
     config = parser.parse_args()
 
     # if toy_run is enabled, set a batch size of 8 for quicker epochs
-    config.batch_size = 8 if config.toy_run is not 1.0  else config.batch_size
+    config.batch_size = 1 if type(config.toy_run) == int else config.batch_size
 
     main(config)

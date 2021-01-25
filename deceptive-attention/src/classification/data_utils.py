@@ -5,18 +5,43 @@ import util
 DATA_PREFIX = "data/"
 
 
-def initialize_vocab():
-    w2i = defaultdict(lambda: len(w2i))
-    w2c = defaultdict(lambda: 0.0)  # word to count
-    t2i = defaultdict(lambda: len(t2i))
-    unk = w2i["<unk>"]
+class Vocabulary(object):
+    def __init__(self, clip_vocab, vocab_size):
+        super().__init__()
 
-    return w2i, w2c, t2i, unk
+        self.clip_vocab = clip_vocab
+        self.vocab_size = vocab_size
+
+        self.w2i = defaultdict(lambda: len(self.w2i))
+        self.w2c = defaultdict(lambda: 0.0)  # word to count
+        self.t2i = defaultdict(lambda: len(self.t2i))
+        self.unk = self.w2i["<unk>"]
+        self.n_words = len(self.w2i)
+
+        # reversed dicts after creation
+        self.i2w = None
+        self.i2t = None
+        self.n_tags = None
+
+    def stop_accepting_words(self):
+        self.n_words = len(self.w2i) if not self.clip_vocab else self.vocab_size
+        self.w2i = defaultdict(lambda: self.unk, self.w2i)
+        self.t2i = defaultdict(lambda: self.unk, self.t2i)
+
+    def reverse_dictionaries(self):
+        # reverse dictionaries
+        self.i2w = {v: k for k, v in self.w2i.items()}
+        self.i2w[self.unk] = "<unk>"
+        self.i2t = {v: k for k, v in self.t2i.items()}
+
+        self.n_tags = len(self.t2i)
 
 
 def read_data(task_name, model_type, logger, clip_vocab=False, block_words=None, to_anon=False, vocab_size=20000,
               use_block_file=False, use_attention_file=False):
-    w2i, w2c, t2i, unk = initialize_vocab()
+    logger.info(f"Reading data:\n\t{task_name}")
+
+    vocabulary = Vocabulary(clip_vocab, vocab_size)
 
     prefix = f"{DATA_PREFIX}{task_name}/"
     train_path = prefix + "train.txt"
@@ -29,14 +54,14 @@ def read_data(task_name, model_type, logger, clip_vocab=False, block_words=None,
 
     if use_block_file:
         # log.pr_blue("Using block file")
-        logger.info("Using block file")
+        logger.info("Using block file.")
 
         train_block_file = f"{prefix}train.txt.block"
         dev_block_file = f"{prefix}dev.txt.block"
         test_block_file = f"{prefix}test.txt.block"
     elif use_attention_file:
         # log.pr_blue("Using attn file")
-        logger.info("Using attn file")
+        logger.info("Using attention file.")
 
         block_w = block_words
         train_attention_file = f"{prefix}train.txt.attn.{model_type}"
@@ -48,51 +73,44 @@ def read_data(task_name, model_type, logger, clip_vocab=False, block_words=None,
             logger.info("Vanilla case: no attention manipulation")
         else:
             # log.pr_blue("Using block words")
-            logger.info("Using block words")
+            logger.info(f"Using block words:\n\t{block_words}")
 
         block_w = block_words
 
     train = list(
-        read_dataset(train_path, w2i, w2c, t2i, vocab_size, unk, to_anon, task_name, block_file=train_block_file,
-                     block_words=block_w, attn_file=train_attention_file, clip_vocab=clip_vocab))
+        read_dataset(train_path, vocabulary, to_anon, task_name, block_file=train_block_file, block_words=block_w,
+                     attn_file=train_attention_file))
 
-    n_words = len(w2i) if not clip_vocab else vocab_size
-    w2i = defaultdict(lambda: unk, w2i)
-    t2i = defaultdict(lambda: unk, t2i)
+    vocabulary.stop_accepting_words()
 
-    dev = list(read_dataset(dev_path, w2i, w2c, t2i, vocab_size, unk, to_anon, task_name, block_file=dev_block_file,
-                            block_words=block_w, attn_file=dev_attention_file))
-    test = list(read_dataset(test_path, w2i, w2c, t2i, vocab_size, unk, to_anon, task_name, block_file=test_block_file,
-                             block_words=block_w, attn_file=test_attention_file))
+    dev = list(read_dataset(dev_path, vocabulary, to_anon, task_name, block_file=dev_block_file, block_words=block_w,
+                            attn_file=dev_attention_file))
+    test = list(read_dataset(test_path, vocabulary, to_anon, task_name, block_file=test_block_file, block_words=block_w,
+                             attn_file=test_attention_file))
 
-    # reverse dictionaries
-    i2w = {v: k for k, v in w2i.items()}
-    i2w[unk] = "<unk>"
-    i2t = {v: k for k, v in t2i.items()}
+    vocabulary.reverse_dictionaries()
 
-    n_tags = len(t2i)
-
-    return train, dev, test, n_words, i2w, i2t, n_tags
+    return train, dev, test, vocabulary
 
 
-def read_dataset(data_file, w2i, w2c, t2i, vocab_size, unk, to_anon, task_name, block_words=None,
-                 block_file=None, attn_file=None, clip_vocab=False):
+def read_dataset(data_file, vocabulary, to_anon, task_name, block_words=None, block_file=None, attn_file=None):
     data_lines = open(data_file, encoding="utf-8").readlines()
 
-    if clip_vocab:
+    if vocabulary.clip_vocab:
         for line in data_lines:
             tag, words = line.strip().lower().split("\t")
 
             for word in words.split():
-                w2c[word] += 1.0
+                vocabulary.w2c[word] += 1.0
 
         # take only top vocab_size words
-        word_freq_list = sorted(w2c.items(), key=lambda x: x[1], reverse=True)[:vocab_size - len(w2i)]
+        word_freq_list = sorted(vocabulary.w2c.items(), key=lambda x: x[1], reverse=True)[
+                         :vocabulary.vocab_size - len(vocabulary.w2i)]
 
         for idx, (word, freq) in enumerate(word_freq_list):
-            temp = w2i[word]  # assign the next available idx
+            temp = vocabulary.w2i[word]  # assign the next available idx
 
-        w2i = defaultdict(lambda: unk, w2i)
+        vocabulary.w2i = defaultdict(lambda: vocabulary.unk, vocabulary.w2i)
 
     block_lines = None
     if block_file is not None:
@@ -135,4 +153,4 @@ def read_dataset(data_file, w2i, w2c, t2i, vocab_size, unk, to_anon, task_name, 
         if len(block_ids) != len(words):
             raise ValueError("num of block words not equal to words")
         # done populating
-        yield idx, [w2i[x] for x in words], block_ids, attn_wts, t2i[tag]
+        yield idx, [vocabulary.w2i[x] for x in words], block_ids, attn_wts, vocabulary.t2i[tag]

@@ -15,6 +15,14 @@ if torch.cuda.is_available():
 DATA_MODELS_PATH = "data/models/"
 
 
+class LossConfig(object):
+    def __init__(self, c_hammer, c_entropy, c_kld):
+        super().__init__()
+        self.c_hammer = c_hammer
+        self.c_entropy = c_entropy
+        self.c_kld = c_kld
+
+
 def set_seed(seed):
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -26,20 +34,21 @@ def set_seed(seed):
     torch.backends.cudnn.benchmark = False
 
 
-def get_trained_model(model_type, task_name, epoch, seed, c_hammer, c_entropy, n_words, n_tags, emb_size=128,
-                      hid_size=64):
-    model = get_model(model_type, n_words, emb_size, hid_size, n_tags)
-    model.load_state_dict(torch.load(get_model_path(c_entropy, c_hammer, epoch, model_type, seed, task_name)))
+def get_trained_model(model_type, task_name, epoch, seed, loss_config, vocabulary, emb_size=128, hid_size=64):
+    model = get_model(model_type, vocabulary, emb_size, hid_size)
+    map_location = torch.cuda if torch.cuda.is_available() else torch.device('cpu')
+    model_object = torch.load(get_model_path(loss_config, epoch, model_type, seed, task_name), map_location=map_location)
+    model.load_state_dict(model_object)
     return model
 
 
-def get_model(model_type, n_words, emb_size, hid_size, n_tags):
+def get_model(model_type, vocabulary, emb_size, hid_size):
     if model_type == 'emb-att':
-        model = EmbAttModel(n_words, emb_size, n_tags)
+        model = EmbAttModel(vocabulary, emb_size)
     elif model_type == 'emb-lstm-att':
-        model = BiLSTMAttModel(n_words, emb_size, hid_size, n_tags)
+        model = BiLSTMAttModel(vocabulary, emb_size, hid_size)
     elif model_type == 'no-att-only-lstm':
-        model = BiLSTMModel(n_words, emb_size, hid_size, n_tags)
+        model = BiLSTMModel(vocabulary, emb_size, hid_size)
     else:
         raise ValueError("model type not compatible")
 
@@ -49,13 +58,14 @@ def get_model(model_type, n_words, emb_size, hid_size, n_tags):
     return model
 
 
-def get_model_path(c_entropy, c_hammer, epoch, model_type, seed, task_name):
+def get_model_path(loss_config, epoch, model_type, seed, task_name):
     return f"{DATA_MODELS_PATH}model={model_type}_task={task_name}_epoch={epoch}_seed={str(seed)}_hammer=" \
-           f"{c_hammer:0.2f}_rand-entropy={c_entropy:0.2f}.pt"
+           f"{loss_config.c_hammer:0.2f}_rand-entropy={loss_config.c_entropy:0.2f}.pt"
 
 
-def evaluate(model, dataset, i2w, i2t, c_entropy, c_hammer, c_kld, emb_dim, understand=False, flow=False, logger=None, stage='test', attn_stats=False, num_vis=0):
-    logger.info(f"Evaluating on {stage} set.\n")
+def evaluate(model, dataset, vocabulary, loss_config, understand=False, flow=False, logger=None, stage='test',
+             attn_stats=False, num_vis=0):
+    logger.info(f"\nEvaluating on {stage} set.\n")
 
     # Perform testing
     test_correct = 0.0
@@ -96,9 +106,9 @@ def evaluate(model, dataset, i2w, i2t, c_entropy, c_hammer, c_kld, emb_dim, unde
             assert 0.99 < torch.sum(attention).item() < 1.01
 
         ce_loss = calc_ce_loss(pred, tag_t)
-        entropy_loss = calc_entropy_loss(attention, c_entropy)
-        hammer_loss = calc_hammer_loss(words, attention, block_ids, c_hammer)
-        kld_loss = calc_kld_loss(attention, attn_orig, c_kld)
+        entropy_loss = calc_entropy_loss(attention, loss_config.c_entropy)
+        hammer_loss = calc_hammer_loss(words, attention, block_ids, loss_config.c_hammer)
+        kld_loss = calc_kld_loss(attention, attn_orig, loss_config.c_kld)
 
         assert hammer_loss.item() >= 0.0
         assert ce_loss.item() >= 0.0
@@ -122,13 +132,14 @@ def evaluate(model, dataset, i2w, i2t, c_entropy, c_hammer, c_kld, emb_dim, unde
 
             attn_scores = attn[0].detach().cpu().numpy()
 
-            example_data.append([[i2w[w] for w in words], attn_scores, i2t[predict], i2t[tag]])
+            example_data.append(
+                [[vocabulary.i2w[w] for w in words], attn_scores, vocabulary.i2t[predict], vocabulary.i2t[tag]])
 
             if understand:
-                headers = ['words', 'attn'] + ['e' + str(i + 1) for i in range(emb_dim)]
+                headers = ['words', 'attn'] + ['e' + str(i + 1) for i in range(model.embedding_dim)]
                 tabulated_list = []
                 for j in range(len(words)):
-                    temp_list = [i2w[words[j]], attn_scores[j]]
+                    temp_list = [vocabulary.i2w[words[j]], attn_scores[j]]
                     for emb in word_embeddings[j]:
                         temp_list.append(emb)
                     tabulated_list.append(temp_list)

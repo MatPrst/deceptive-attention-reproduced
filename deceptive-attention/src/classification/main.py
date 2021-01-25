@@ -92,16 +92,13 @@ TENSORBOARD = params['tensorboard_log']
 LOG_PATH = "logs/"
 
 # user specified constants
-C_ENTROPY = params['loss_entropy']
-C_HAMMER = params['loss_hammer']
-C_KLD = params['loss_kld']
+LOSS_CONFIG = LossConfig(params['loss_hammer'], params['loss_entropy'], params['loss_kld'])
 NUM_VIS = params['num_vis']
 NUM_EPOCHS = params['num_epochs']
 EMB_SIZE = params['emb_size']
 HID_SIZE = params['hid_size']
 EPSILON = 1e-12
 TO_ANON = params['anon']
-print(TO_ANON)
 TO_DUMP_ATTN = params['dump_attn']
 BLOCK_TOP = params['top']
 BLOCK_WORDS = params['block_words']
@@ -122,35 +119,35 @@ os.makedirs(LOG_PATH, exist_ok=True)
 os.makedirs(DATA_MODELS_PATH, exist_ok=True)
 
 # SETUP LOGGING
-LOGGER = setup_logger(LOG_PATH, f"task={TASK_NAME}__model={MODEL_TYPE}_hammer={C_HAMMER}_seed={SEED}")
+LOGGER = setup_logger(LOG_PATH, f"task={TASK_NAME}__model={MODEL_TYPE}_hammer={LOSS_CONFIG.c_hammer}_seed={SEED}")
 LOGGER.info(f"Task: {TASK_NAME}")
 LOGGER.info(f"Model: {MODEL_TYPE}")
-LOGGER.info(f"Coef (hammer): {C_HAMMER:0.2f}")
-LOGGER.info(f"Coef (random-entropy): {C_ENTROPY:0.2f}")
+LOGGER.info(f"Coef (hammer): {LOSS_CONFIG.c_hammer:0.2f}")
+LOGGER.info(f"Coef (random-entropy): {LOSS_CONFIG.c_entropy:0.2f}")
 LOGGER.info(f"Seed: {SEED}")
 
 set_seed(SEED)
 
 # READING THE DATA
 
-TRAIN, DEV, TEST, N_WORDS, I2W, I2T, N_TAGS = read_data(TASK_NAME, MODEL_TYPE, LOGGER, CLIP_VOCAB, BLOCK_WORDS, TO_ANON,
-                                                        VOCAB_SIZE, USE_BLOCK_FILE, USE_ATTN_FILE)
+TRAIN, DEV, TEST, VOCABULARY = read_data(TASK_NAME, MODEL_TYPE, LOGGER, CLIP_VOCAB, BLOCK_WORDS, TO_ANON, VOCAB_SIZE,
+                                         USE_BLOCK_FILE, USE_ATTN_FILE)
 
 if DEBUG:
     TRAIN = TRAIN[:100]
     DEV = DEV[:100]
     TEST = TEST[:100]
 
-LOGGER.info(f"The vocabulary size is {N_WORDS}")
+LOGGER.info(f"The vocabulary size is {VOCABULARY.n_words}")
 
-current_model = get_model(MODEL_TYPE, N_WORDS, EMB_SIZE, HID_SIZE, N_TAGS)
+current_model = get_model(MODEL_TYPE, VOCABULARY, EMB_SIZE, HID_SIZE)
 calc_ce_loss = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(current_model.parameters())
 
 LOGGER.info(f"\nEvaluating without any training ...")
 LOGGER.info(f"ITER: {0}")
-_, _ = evaluate(current_model, TEST, I2W, I2T, C_ENTROPY, C_HAMMER, C_KLD, EMB_SIZE, UNDERSTAND,
-                FLOW, LOGGER, stage='test', attn_stats=True, num_vis=0)
+_, _ = evaluate(current_model, TEST, VOCABULARY, LOSS_CONFIG, UNDERSTAND, FLOW, LOGGER,
+                stage='test', attn_stats=True, num_vis=0)
 
 WRITER = None
 if TENSORBOARD:
@@ -186,11 +183,11 @@ for ITER in range(1, NUM_EPOCHS + 1):
         attention = attns[0]
 
         ce_loss = calc_ce_loss(out, tag)
-        entropy_loss = calc_entropy_loss(attention, C_ENTROPY)
+        entropy_loss = calc_entropy_loss(attention, LOSS_CONFIG.c_entropy)
         hammer_loss = calc_hammer_loss(words_orig, attention,
-                                       block_ids, C_HAMMER)
+                                       block_ids, LOSS_CONFIG.c_hammer)
 
-        kld_loss = calc_kld_loss(attention, attn_orig, C_KLD)
+        kld_loss = calc_kld_loss(attention, attn_orig, LOSS_CONFIG.c_kld)
 
         loss = ce_loss + entropy_loss + hammer_loss + kld_loss
         train_loss += loss.item()
@@ -218,23 +215,21 @@ for ITER in range(1, NUM_EPOCHS + 1):
     epoch_duration = time.time() - start
 
     len_train_set = len(TRAIN)
-
     avg_train_loss = train_loss / len_train_set
     avg_train_ce_loss = train_ce_loss / len_train_set
     avg_train_entropy_loss = train_entropy_loss / len_train_set
     avg_train_hammer_loss = train_hammer_loss / len_train_set
     avg_train_kld_loss = train_kld_loss / len_train_set
 
-    LOGGER.info("train loss=%.4f, ce_loss=%.4f, entropy_loss=%.4f, hammer_loss=%.4f, kld_loss==%.4f, time=%.2fs"
+    LOGGER.info("train loss=%.4f, ce_loss=%.4f, entropy_loss=%.4f, hammer_loss=%.4f, kld_loss==%.4f, time=%.2fs\n"
                 % (avg_train_loss, avg_train_ce_loss, avg_train_entropy_loss, avg_train_hammer_loss, avg_train_kld_loss,
                    epoch_duration))
 
-    train_acc, train_loss = evaluate(current_model, TRAIN, I2W, I2T, C_ENTROPY, C_HAMMER, C_KLD, EMB_SIZE,
-                                     logger=LOGGER, stage='train')
-    dev_acc, dev_loss = evaluate(current_model, DEV, I2W, I2T, C_ENTROPY, C_HAMMER, C_KLD, EMB_SIZE,
-                                 logger=LOGGER, stage='dev', attn_stats=True)
-    test_acc, test_loss = evaluate(current_model, TEST, I2W, I2T, C_ENTROPY, C_HAMMER, C_KLD, EMB_SIZE,
-                                   logger=LOGGER, stage='test', attn_stats=True, num_vis=NUM_VIS)
+    train_acc, train_loss = evaluate(current_model, TRAIN, VOCABULARY, LOSS_CONFIG, logger=LOGGER, stage='train')
+    dev_acc, dev_loss = evaluate(current_model, DEV, VOCABULARY, LOSS_CONFIG, logger=LOGGER, stage='dev',
+                                 attn_stats=True)
+    test_acc, test_loss = evaluate(current_model, TEST, VOCABULARY, LOSS_CONFIG, logger=LOGGER, stage='test',
+                                   attn_stats=True, num_vis=NUM_VIS)
 
     if WRITER is not None:
         # Training metrics
@@ -270,4 +265,4 @@ for ITER in range(1, NUM_EPOCHS + 1):
 
     # save the trained model
     LOGGER.info("Saving trained model.\n")
-    torch.save(current_model.state_dict(), get_model_path(C_ENTROPY, C_HAMMER, best_epoch, MODEL_TYPE, SEED, TASK_NAME))
+    torch.save(current_model.state_dict(), get_model_path(LOSS_CONFIG, best_epoch, MODEL_TYPE, SEED, TASK_NAME))

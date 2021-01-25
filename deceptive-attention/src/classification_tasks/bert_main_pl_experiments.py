@@ -211,10 +211,58 @@ class BERTModel(LightningModule):
 
         return R, torch.mean(attention_mass).item()
 
+
+def get_lowest(path_dict, baseline):
+    """ This beautiful function takes a dict of model paths and
+    returns the path with the lowest dev attention mass """
+    am_values = []  # save the dev AM values in a list
+    acc_values = []  # save the dev acc values in a list
+    for path in path_dict.keys():  # Iterate over the k paths
+
+        am_value = path[-10:-5]  # Extract the Dev AM score from the path str
+        am_values.append(float(am_value))
+
+        acc_value = path[-34:-30] # Extract the test acc score from the path str
+        acc_values.append(float(acc_value))
+
+    eligible = [] # keep track of checkpoints whose test accuracies are /geq 0.02
+    for i, path in enumerate(path_dict.keys()):
+        difference = abs(acc_values[i] - baseline)
+        if difference <= 0.02:
+            eligible.append(i)
+
+    # from all models that are within the 0.02% range, we pick the one with the greatest
+    # reduction in AM, i.e. the model with the smallest attention mass
+    if len(eligible) > 0:
+        smallest = 999.0
+        smallest_idx = None
+        for i, path in enumerate(path_dict.keys()):
+            if i in eligible:
+                if am_values[i] < smallest:
+                    smallest = am_values[i]
+                    smallest_idx = i
+        # return the path of the model with the smallest AM
+        for i, path in enumerate(path_dict.keys()):
+            if i == smallest_idx:
+                return path
+
+    # if none of the models are within the 0.02% range we output None
+    else:
+        print('None of the models are within 2% acc range')
+        return None
+
+def del_checkpoints(path_dict, best_model_path):
+    """
+    This function deletes redundant checkpoint files
+    after the train-val-test loop is finished
+    """
+    for path in path_dict.keys():
+        if path != best_model_path:
+            os.remove(path)
+
 def main(args):
 
     print('\n -------------- Classification with BERT ------------------------------------ \n')
-
 
     # print CLI args
     print('Arguments: ')
@@ -224,18 +272,18 @@ def main(args):
     # Set global Lightning seed
     seed_everything(config.seed)
 
-    # This mode turns on more detailed torch error descriptions (False by default)
+    # This mode turns on more detailed torch error descriptions (disabled by default)
     if config.debug:
         torch.autograd.set_detect_anomaly(True)
 
-    # Turn off GPU available prompts for less cluttered console output (warnings disabled by default)
+    # Turn off GPU available prompts for less cluttered console output (disabled by default)
     if config.warnings == False:
 
         warnings.filterwarnings('ignore')
-        # configure logging at the root level of lightning
+        # configure logging at the root level of lightning to get rid of GPU/TPU availability prompts
         logging.getLogger('lightning').setLevel(0)
 
-    ############################# Code for replicating all 7 experiments for a given task ############################
+    # -------------------- Code for replicating all 7 experiments for a given task ------------------------ #
     # time the total duration of the experiments
     start = time.time()
 
@@ -297,11 +345,12 @@ def main(args):
 
         if mode == 'adversarial':
 
-            ############################### Code for replicating adversarial experiments ###############################
+            # ----------------------------  Code for replicating adversarial experiments ---------------------------- #
             print('\n -------------- Beginning adversarial experiments for task: {} -------------- \n'.format(config.task))
 
             # for the 'adversarial' models, there are 2 x 3 = 6 possible experiments that need to be ran.
             penalty_fns = ['mean', 'max']
+
             lambdas = [0, 0.1, 1.0]
 
             # run experiments for both penalty fns
@@ -309,6 +358,8 @@ def main(args):
 
                 # given a penalty fn, run experiments for all values of lambda
                 for lambeda in lambdas:
+
+                    print('Training for penalty_fn = {} and lambda = {}...'.format(penalty_fn, lambeda))
 
                     # Define model
                     model = BERTModel(dropout=config.dropout,
@@ -322,31 +373,14 @@ def main(args):
                                                             config.seed, config.task, penalty_fn, lambeda))
                     logger.log_hyperparams(config)
 
-                    # for lambda 0 (the baseline), we checkpoint based on dev accuracy
-                    if lambeda == 0:
-
-                        # Specify checkpoint callback and monitoring metric
-                        checkpoint_callback = ModelCheckpoint(
-                                            monitor='val_acc',
-                                              dirpath='experiment_results/checkpoints/seed_{}/task_{}/penalty_{}_lambda_{}/'.format(
-                                                  config.seed, config.task, penalty_fn, lambeda),
-                                              filename='model-{epoch:02d}-{val_acc:.2f}',
-                                              save_top_k=1,
-                                              mode='max', )
-
-                    # for lambda 0.1 & 1.0 (the 'adversarial' models), we checkpoint based on the dev attention mass
-                    else:
-
-                        print('calling the other callback since lambda is {} now'.format(lambeda))
-
-                        # Specify checkpoint callback and monitoring metric
-                        checkpoint_callback = ModelCheckpoint(
-                                            monitor='val_attention_mass',
-                                            dirpath='experiment_results/checkpoints/seed_{}/task_{}/penalty_{}_lambda_{}/'.format(
-                                                config.seed, config.task, penalty_fn, lambeda),
-                                            filename='model-{epoch:02d}-{val_acc:.2f}',
-                                            save_top_k=1,
-                                            mode='min', )
+                    # For lambda 0 (the baseline), we checkpoint based on dev accuracy
+                    checkpoint_callback = ModelCheckpoint(
+                                          monitor='val_acc',
+                                          dirpath='experiment_results/checkpoints/seed_{}/task_{}/penalty_{}_lambda_{}/'.format(
+                                              config.seed, config.task, penalty_fn, lambeda),
+                                          filename='model-{epoch:02d}-{val_acc:.2f}-{val_attention_mass:.2f}',
+                                          save_top_k=10,
+                                          mode='max', )
 
                     # Initialise DataModule
                     dm = GenericDataModule(task=config.task,
@@ -371,13 +405,55 @@ def main(args):
                     # Train model
                     trainer.fit(model, dm)
 
-                    # Load checkpoint with best dev accuracy
+                    # ---------------------------- Model Selection Logic ---------------------------------------
+
+                    # For the lambda = 0 baseline, we evaluate on test set using ckpt with highest dev accuracy
+                    # For the lambda!= 0 models, we consider all models whose dev acc is within 2% range of baseline acc
+                    # From those models, we pick the model with the lowest dev attention mass
+                    path_dict = checkpoint_callback.best_k_models # extract a dictionary of all k checkpoint paths
+                    if lambeda != 0:    # comparison only holds for lambda 0.1, 1.0
+
+                        # access baseline test accuracy
+                        key = penalty_fn + '_test_acc'
+                        baseline_acc = results_dict[key]
+
+                        # def get_lowest(path_dict):
+                        #     """ This function takes a dict of model paths and
+                        #     returns the path with the lowest dev attention mass"""
+                        #     values = [] # save the dev AM values in a list
+                        #     for path in path_dict.keys(): # Iterate over the k paths
+                        #         value = path[-10:-5] # Extract the Dev AM score from the path str
+                        #         values.append(float(value)) # Add dev AM score to list
+                        #     min_idx = values.index(min(values)) # Get idx of smallest dev AM value
+                        #     for i, path in enumerate(path_dict.keys()):
+                        #         if i == min_idx: # return path with lowest dev AM
+                        #             return path
+
+                        # obtain ckpt path with lowest dev AM
+                        best_model_path = get_lowest(path_dict, baseline_acc) # obtain path with lowest dev AM
+                        if best_model_path is not None: # we only overwrite the path if there is a checkpoint within 2% acc
+                            checkpoint_callback.best_model_path = best_model_path
+
+                    print(checkpoint_callback.best_model_path)
+
+                    # (re)set best model path for testing
                     checkpoint_callback.best_model_path
 
                     # Evaluate on test set
                     print('Test results on task={} for model with penalty_fn={}, lambda={}: '.format(
                         config.task, penalty_fn, lambeda))
                     result = trainer.test()
+
+                    # if lambda = 0, we want to store the baseline test acc for later use
+                    result_dict = result[0]
+                    if lambeda == 0:
+                        results_dict = {}
+                        key = penalty_fn + '_test_acc'
+                        results_dict[key] = result[0]['test_acc']
+
+                    # logic to delete files that are no longer needed
+                    best_model_path = checkpoint_callback.best_model_path # determine which checkpoint to keep
+                    del_checkpoints(path_dict, best_model_path) # remove other redundant checkpoints
 
     end = time.time()
     print("\n -------------- Finished running experiments --------------")
@@ -421,7 +497,6 @@ if __name__ == '__main__':
     log_every = 10 if device_count() > 0 else 1
     parser.add_argument('--log_every', default=log_every, type=int,
                         help='number of steps between loggings')
-
 
     # Auxiliary args
     parser.add_argument('--debug', default=False, type=bool,

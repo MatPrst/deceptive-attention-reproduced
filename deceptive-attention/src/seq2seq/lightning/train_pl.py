@@ -70,7 +70,6 @@ class TranslationCallback(pl.Callback):
 
         self.logger.info(f'BLEU score: {bleu_score}\n')
         pl_module.log("bleu_score", bleu_score)
-        # trainer.logger.experiment.add_scalar("bleu_score", bleu_score, global_step=epoch)
 
         fw = open(f"{self.out_path}.test.out", 'w')
         for line in translations:
@@ -127,7 +126,6 @@ def train_gru(parameters):
                                                    every_n_epochs=2)
 
     trainer = Trainer(default_root_dir=LOG_PATH,
-                      # logger=pl_loggers.TensorBoardLogger(LOG_PATH),
                       checkpoint_callback=ModelCheckpoint(save_weights_only=True),
                       gpus=1 if torch.cuda.is_available() else 0,
                       max_epochs=epochs,

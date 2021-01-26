@@ -253,24 +253,15 @@ def evaluate(model, data, criterion):
 def generate(model, data):
     # NOTE this assumes batch size 1
     model.eval()
-
-    epoch_loss = 0
-    total_correct = 0.0
-    total_trg = 0.0
-    # total_src = 0.0
-    total_attn_mass_imp = 0.0
     generated_lines = []
 
     with torch.no_grad():
         for src, src_len, _, _, _ in tqdm(data):
             # create tensors here...
             src = torch.tensor(src).type(long_type).permute(1, 0)
-            # trg = torch.tensor(trg).type(long_type).permute(1, 0)
 
             output, attention = model(src, src_len, None, 0)  # turn off teacher forcing
-
             output = output[1:].squeeze(dim=1)
-            # output = [(trg sent len - 1), output dim]
 
             predictions = torch.argmax(output, dim=1)  # long tensor
             # shape [trg len - 1]

@@ -534,3 +534,6 @@ for ITER in range(1, NUM_EPOCHS+1):
     print ("iter %r: best test accuracy = %.4f attained after epoch = %d" %(
         ITER, best_test_accuracy, best_epoch))
 
+
+
+

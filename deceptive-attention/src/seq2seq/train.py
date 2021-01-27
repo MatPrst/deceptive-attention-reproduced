@@ -483,14 +483,20 @@ def generate_translations(model, sentences, logger):
     test_sentences = sentences[2]
     single_test_batch = list(get_batches(test_sentences, 1, SRC_LANG, TRG_LANG))
 
-    logger.info(f'batch single {str(single_test_batch)}')
-    logger.info(f'batch single length {str(len(single_test_batch))}')
+    # logger.info(f'batch single {str(single_test_batch)}')
+    # logger.info(f'batch single length {str(len(single_test_batch))}')
 
     output_lines = generate(model, single_test_batch)
     target_sentences = get_target_sentences_as_list(single_test_batch, TRG_LANG)
     bleu_nltk = bleu_score_nltk(target_sentences, output_lines)
 
-    return output_lines, [' '.join(stc) for stc in target_sentences], bleu_nltk * 100  # report it in percentage
+    # [[...], [...]] --> [..., ...]
+    targets = []
+    for word_list in target_sentences:
+        sentence = [' '.join(word) for word in word_list]
+        targets.append(sentence)
+
+    return output_lines, targets, bleu_nltk * 100  # report it in percentage
 
 
 def main():

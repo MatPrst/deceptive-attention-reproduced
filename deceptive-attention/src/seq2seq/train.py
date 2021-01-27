@@ -391,53 +391,53 @@ def train(task=TASK,
 
     no_improvement_last_time = False
 
-    # for epoch in range(epochs):
-    #
-    #     start_time = time.time()
-    #
-    #     train_loss, train_acc, train_attn_mass = train_model(model, train_batches, optimizer, criterion, coeff)
-    #     val_loss, val_acc, val_attn_mass = evaluate(model, dev_batches, criterion)
-    #
-    #     if writer is not None:
-    #         writer.add_scalar("Loss/train", train_loss, epoch)
-    #         writer.add_scalar("Accuracy/train", train_acc, epoch)
-    #         writer.add_scalar("AttentionMass/train", train_attn_mass, epoch)
-    #
-    #         # writer.add_hparams({"lr": "learning_rate", "bsize": batch_size, "task": task, "coeff": coeff, "seed": seed},
-    #         #                    {})
-    #         # {'accuracy': train_acc, 'loss': train_loss})
-    #
-    #         writer.add_scalar("Loss/valid", val_loss, epoch)
-    #         writer.add_scalar("Accuracy/valid", val_acc, epoch)
-    #         writer.add_scalar("AttentionMass/valid", val_attn_mass, epoch)
-    #
-    #     end_time = time.time()
-    #
-    #     epoch_minutes, epoch_secs = epoch_time(start_time, end_time)
-    #
-    #     if val_loss < best_valid_loss:
-    #         best_valid_loss = val_loss
-    #         torch.save(model.state_dict(),
-    #                    DATA_MODELS_PATH + 'model_' + task + suffix + '_seed=' + str(seed) + '_coeff='
-    #                    + str(coeff) + '_num-train=' + str(num_train) + '.pt')
-    #         epochs_taken_to_converge = epoch + 1
-    #         convergence_time += (end_time - start_time)
-    #         no_improvement_last_time = False
-    #     else:
-    #         # no improvement this time
-    #         if no_improvement_last_time:
-    #             break
-    #         no_improvement_last_time = True
-    #
-    #     logger.info(f'Epoch: {epoch + 1:02} | Time: {epoch_minutes}m {epoch_secs}s')
-    #     logger.info(f'\tTrain Loss: {train_loss:.3f} | Train Acc: {train_acc:0.2f} \
-    #         | Train Attn Mass: {train_attn_mass:0.2f} | Train PPL: {math.exp(train_loss):7.3f}')
-    #     logger.info(f'\t Val. Loss: {val_loss:.3f} |   Val Acc: {val_acc:0.2f} \
-    #         |  Val. Attn Mass: {val_attn_mass:0.2f} |  Val. PPL: {math.exp(val_loss):7.3f}')
+    for epoch in range(epochs):
 
-    # load the best model and print stats:
-    # model.load_state_dict(torch.load(DATA_MODELS_PATH + 'model_' + task + suffix + '_seed=' + str(seed) + '_coeff='
-    #                                  + str(coeff) + '_num-train=' + str(num_train) + '.pt'))
+        start_time = time.time()
+
+        train_loss, train_acc, train_attn_mass = train_model(model, train_batches, optimizer, criterion, coeff)
+        val_loss, val_acc, val_attn_mass = evaluate(model, dev_batches, criterion)
+
+        if writer is not None:
+            writer.add_scalar("Loss/train", train_loss, epoch)
+            writer.add_scalar("Accuracy/train", train_acc, epoch)
+            writer.add_scalar("AttentionMass/train", train_attn_mass, epoch)
+
+            # writer.add_hparams({"lr": "learning_rate", "bsize": batch_size, "task": task, "coeff": coeff, "seed": seed},
+            #                    {})
+            # {'accuracy': train_acc, 'loss': train_loss})
+
+            writer.add_scalar("Loss/valid", val_loss, epoch)
+            writer.add_scalar("Accuracy/valid", val_acc, epoch)
+            writer.add_scalar("AttentionMass/valid", val_attn_mass, epoch)
+
+        end_time = time.time()
+
+        epoch_minutes, epoch_secs = epoch_time(start_time, end_time)
+
+        if val_loss < best_valid_loss:
+            best_valid_loss = val_loss
+            torch.save(model.state_dict(),
+                       DATA_MODELS_PATH + 'model_' + task + suffix + '_seed=' + str(seed) + '_coeff='
+                       + str(coeff) + '_num-train=' + str(num_train) + '.pt')
+            epochs_taken_to_converge = epoch + 1
+            convergence_time += (end_time - start_time)
+            no_improvement_last_time = False
+        else:
+            # no improvement this time
+            if no_improvement_last_time:
+                break
+            no_improvement_last_time = True
+
+        logger.info(f'Epoch: {epoch + 1:02} | Time: {epoch_minutes}m {epoch_secs}s')
+        logger.info(f'\tTrain Loss: {train_loss:.3f} | Train Acc: {train_acc:0.2f} \
+            | Train Attn Mass: {train_attn_mass:0.2f} | Train PPL: {math.exp(train_loss):7.3f}')
+        logger.info(f'\t Val. Loss: {val_loss:.3f} |   Val Acc: {val_acc:0.2f} \
+            |  Val. Attn Mass: {val_attn_mass:0.2f} |  Val. PPL: {math.exp(val_loss):7.3f}')
+
+    load the best model and print stats:
+    model.load_state_dict(torch.load(DATA_MODELS_PATH + 'model_' + task + suffix + '_seed=' + str(seed) + '_coeff='
+                                     + str(coeff) + '_num-train=' + str(num_train) + '.pt'))
 
     test_loss, test_acc, test_attn_mass = evaluate(model, test_batches, criterion)
     logger.info(f'\t Test Loss: {test_loss:.3f} |  Test Acc: {test_acc:0.2f} \

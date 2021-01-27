@@ -56,6 +56,7 @@ TENSORBOARD_LOG = params['tensorboard_log']
 LOG_PATH = "logs/"
 DATA_PATH = "data/"
 DATA_VOCAB_PATH = "data/vocab/"
+DATA_TRANSLATIONS_PATH = "data/translations/"
 DATA_MODELS_PATH = "data/models/"
 
 long_type = torch.LongTensor
@@ -447,21 +448,30 @@ def train(task=TASK,
     logger.info(f"Convergence time in seconds ..\t{convergence_time:0.2f}")
     logger.info(f"Sample efficiency in epochs ..\t{epochs_taken_to_converge}")
 
-    out_path = f"{DATA_VOCAB_PATH}{task}{suffix}_seed={str(seed)}_coeff={str(coeff)}_num-train={str(num_train)}"
-    SRC_LANG.save_vocab(f"{out_path}.src.vocab")
-    TRG_LANG.save_vocab(f"{out_path}.trg.vocab")
+    data_out_path = f"{task}{suffix}_seed={str(seed)}_coeff={str(coeff)}_epoch={str(epochs_taken_to_converge)}"
+    vocab_out_path = f"{DATA_VOCAB_PATH}{data_out_path}"
+    SRC_LANG.save_vocab(f"{vocab_out_path}.src.vocab")
+    TRG_LANG.save_vocab(f"{vocab_out_path}.trg.vocab")
 
     if task in ['en-hi', 'en-de']:
         # generate the output to compute bleu scores as well...
         logger.info("Generating the output translations from the model.")
 
-        translations, bleu_score = generate_translations(model, sentences, logger)
+        translations_out_path = f"{DATA_TRANSLATIONS_PATH}{data_out_path}"
+        translations, src_sentences, bleu_score = generate_translations(model, sentences, logger)
 
         logger.info(f"BLEU score ..........\t{bleu_score:0.2f}")
         logger.info("[done] .... now dumping the translations.")
 
-        fw = open(f"{out_path}.test.out", 'w')
+        fw = open(f"{translations_out_path}.test.out", 'w')
         for line in translations:
+            fw.write(line.strip() + "\n")
+        fw.close()
+
+        logger.info(" .... now dumping the respective src sentences.")
+
+        fw = open(f"{translations_out_path}.src.out", 'w')
+        for line in src_sentences:
             fw.write(line.strip() + "\n")
         fw.close()
 
@@ -471,15 +481,20 @@ def train(task=TASK,
 
 def generate_translations(model, sentences, logger):
     test_sentences = sentences[2]
-    test_batches_single = list(get_batches(test_sentences, 1, SRC_LANG, TRG_LANG))
+    single_test_batch = list(get_batches(test_sentences, 1, SRC_LANG, TRG_LANG))
 
-    logger.info(f'batch single {str(test_batches_single)}')
-    logger.info(f'batch single length {str(len(test_batches_single))}')
+    logger.info(f'batch single {str(single_test_batch)}')
+    logger.info(f'batch single length {str(len(single_test_batch))}')
 
-    output_lines = generate(model, test_batches_single)
-    score = bleu_score_corpus(test_batches_single, output_lines, TRG_LANG)
+    output_lines = generate(model, single_test_batch)
 
-    return output_lines, score * 100  # report it in percentage
+    target_sentences = get_target_sentences_as_list(single_test_batch, TRG_LANG)
+    bleu_nltk = bleu_score_nltk(target_sentences, output_lines)
+
+    # store output lines ans source lines in separate files for computing BLEU score with compare-mt
+    # store_files(target_sentences, output_lines)
+
+    return output_lines, [' '.join(stc) for stc in target_sentences], bleu_nltk * 100  # report it in percentage
 
 
 def main():

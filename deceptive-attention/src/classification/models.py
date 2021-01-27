@@ -14,7 +14,7 @@ class EmbAttModel(nn.Module):
         super(EmbAttModel, self).__init__()
 
         # layers
-        self.embedding_layer = nn.Embedding(vocabulary.vocab_size, emb_dim)
+        self.embedding_layer = nn.Embedding(vocabulary.n_words, emb_dim)
         self.weight_layer = nn.Linear(emb_dim, 1)
         self.linear = nn.Linear(emb_dim, vocabulary.n_tags)
 
@@ -100,7 +100,7 @@ class BiLSTMAttModel(nn.Module):
         super(BiLSTMAttModel, self).__init__()
 
         # layers
-        self.embedding_layer = nn.Embedding(vocabulary.vocab_size, emb_dim)
+        self.embedding_layer = nn.Embedding(vocabulary.n_words, emb_dim)
         self.lstm_layer = nn.LSTM(emb_dim, hid_dim, bidirectional=True, batch_first=True)
         self.weight_layer = nn.Linear(2 * hid_dim, 1)
         self.linear = nn.Linear(2 * hid_dim, vocabulary.n_tags)
@@ -141,7 +141,7 @@ class BiLSTMModel(nn.Module):
         super(BiLSTMModel, self).__init__()
 
         # layers
-        self.embedding_layer = nn.Embedding(vocabulary.vocab_size, emb_dim)
+        self.embedding_layer = nn.Embedding(vocabulary.n_words, emb_dim)
         self.lstm_layer = nn.LSTM(emb_dim, hid_dim, bidirectional=True, batch_first=True)
         self.linear = nn.Linear(2 * hid_dim, vocabulary.n_tags)
 

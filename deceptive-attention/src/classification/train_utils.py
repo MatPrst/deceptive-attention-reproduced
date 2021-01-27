@@ -92,7 +92,6 @@ def evaluate(model, dataset, vocabulary, loss_config, understand=False, flow=Fal
         logger.info(bias.detach().cpu().numpy())
 
     for idx, words, block_ids, attn_orig, tag in dataset:
-        print(idx)
         words_t = torch.tensor([words]).type(LONG_TYPE)
         tag_t = torch.tensor([tag]).type(LONG_TYPE)
         if attn_orig is not None:

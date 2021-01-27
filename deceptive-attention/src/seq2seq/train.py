@@ -464,7 +464,7 @@ def train(task=TASK,
 
         # store files for computing BLEU score for compare-mt afterwards manually via the terminal
         logger.info("[done] .... now dumping the translations.")
-        fw = open(f"{translations_out_path}.test.out", 'w')
+        fw = open(f"{translations_out_path}.test.out", 'w', encoding='utf-8')
         for line in translations:
             fw.write(line.strip() + "\n")
         fw.close()
@@ -474,7 +474,7 @@ def train(task=TASK,
         # flatten list
         src_sentences = [j for i in src_sentences for j in i]
 
-        fw = open(f"{translations_out_path}.src.out", 'w')
+        fw = open(f"{translations_out_path}.src.out", 'w', encoding='utf-8')
         for line in src_sentences:
             fw.write(line.strip() + "\n")
         fw.close()

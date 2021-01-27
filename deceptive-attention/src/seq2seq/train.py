@@ -470,6 +470,7 @@ def train(task=TASK,
         fw.close()
 
         logger.info(" .... now dumping the respective src sentences.")
+        print(src_sentences[0])
         fw = open(f"{translations_out_path}.src.out", 'w')
         for line in src_sentences:
             fw.write(line.strip() + "\n")

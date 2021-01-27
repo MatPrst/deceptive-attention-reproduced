@@ -435,7 +435,7 @@ def train(task=TASK,
         logger.info(f'\t Val. Loss: {val_loss:.3f} |   Val Acc: {val_acc:0.2f} \
             |  Val. Attn Mass: {val_attn_mass:0.2f} |  Val. PPL: {math.exp(val_loss):7.3f}')
 
-    load the best model and print stats:
+    # load the best model and print stats:
     model.load_state_dict(torch.load(DATA_MODELS_PATH + 'model_' + task + suffix + '_seed=' + str(seed) + '_coeff='
                                      + str(coeff) + '_num-train=' + str(num_train) + '.pt'))
 

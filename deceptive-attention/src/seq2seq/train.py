@@ -508,6 +508,8 @@ def main():
     if not os.path.exists(DATA_VOCAB_PATH):
         os.makedirs(DATA_VOCAB_PATH)
 
+    os.makedirs(DATA_TRANSLATIONS_PATH, exist_ok=True)
+
     train()
 
 

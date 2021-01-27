@@ -1,0 +1,10 @@
+--epochs 30 --task en-de --seed 1 --loss-coef 0.0 --attention uniform --tensorboard_log
+--epochs 30 --task en-de --seed 2 --loss-coef 0.0 --attention uniform --tensorboard_log
+--epochs 30 --task en-de --seed 3 --loss-coef 0.0 --attention uniform --tensorboard_log
+--epochs 30 --task en-de --seed 4 --loss-coef 0.0 --attention uniform --tensorboard_log
+--epochs 30 --task en-de --seed 5 --loss-coef 0.0 --attention uniform --tensorboard_log
+--epochs 30 --task en-de --seed 1 --loss-coef 0.0 --attention no-attention --tensorboard_log
+--epochs 30 --task en-de --seed 2 --loss-coef 0.0 --attention no-attention --tensorboard_log
+--epochs 30 --task en-de --seed 3 --loss-coef 0.0 --attention no-attention --tensorboard_log
+--epochs 30 --task en-de --seed 4 --loss-coef 0.0 --attention no-attention --tensorboard_log
+--epochs 30 --task en-de --seed 5 --loss-coef 0.0 --attention no-attention --tensorboard_log

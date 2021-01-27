@@ -72,11 +72,11 @@ def read_data(task_name, model_type, logger=None, clip_vocab=False, block_words=
         if block_words is None:
             # log.pr_blue("Vanilla case: no attention manipulation")
             if logger is not None:
-                logger.info("Vanilla case: no attention manipulation")
+                logger.info("Vanilla case: no attention manipulation.\n")
         else:
             # log.pr_blue("Using block words")
             if logger is not None:
-                logger.info(f"Using block words:\n\t{block_words}")
+                logger.info(f"Using block words:\n\t{block_words}\n")
 
         block_w = block_words
 

@@ -124,7 +124,7 @@ LOGGER.info(f"Task: {TASK_NAME}")
 LOGGER.info(f"Model: {MODEL_TYPE}")
 LOGGER.info(f"Coef (hammer): {LOSS_CONFIG.c_hammer:0.2f}")
 LOGGER.info(f"Coef (random-entropy): {LOSS_CONFIG.c_entropy:0.2f}")
-LOGGER.info(f"Seed: {SEED}")
+LOGGER.info(f"Seed: {SEED}\n")
 
 set_seed(SEED)
 
@@ -138,7 +138,8 @@ if DEBUG:
     DEV = DEV[:100]
     TEST = TEST[:100]
 
-LOGGER.info(f"The vocabulary size is {VOCABULARY.n_words}")
+LOGGER.info(f"The source vocabulary size / input_dim is {VOCABULARY.n_words}")
+LOGGER.info(f"The target vocabulary size / output_dim is {VOCABULARY.n_tags}")
 
 current_model = get_model(MODEL_TYPE, VOCABULARY, EMB_SIZE, HID_SIZE)
 calc_ce_loss = nn.CrossEntropyLoss()

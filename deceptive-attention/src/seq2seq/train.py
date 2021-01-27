@@ -461,15 +461,15 @@ def train(task=TASK,
         translations, src_sentences, bleu_score = generate_translations(model, sentences, logger)
 
         logger.info(f"BLEU score ..........\t{bleu_score:0.2f}")
-        logger.info("[done] .... now dumping the translations.")
 
+        # store files for computing BLEU score for compare-mt afterwards manually via the terminal
+        logger.info("[done] .... now dumping the translations.")
         fw = open(f"{translations_out_path}.test.out", 'w')
         for line in translations:
             fw.write(line.strip() + "\n")
         fw.close()
 
         logger.info(" .... now dumping the respective src sentences.")
-
         fw = open(f"{translations_out_path}.src.out", 'w')
         for line in src_sentences:
             fw.write(line.strip() + "\n")
@@ -487,12 +487,8 @@ def generate_translations(model, sentences, logger):
     logger.info(f'batch single length {str(len(single_test_batch))}')
 
     output_lines = generate(model, single_test_batch)
-
     target_sentences = get_target_sentences_as_list(single_test_batch, TRG_LANG)
     bleu_nltk = bleu_score_nltk(target_sentences, output_lines)
-
-    # store output lines ans source lines in separate files for computing BLEU score with compare-mt
-    # store_files(target_sentences, output_lines)
 
     return output_lines, [' '.join(stc) for stc in target_sentences], bleu_nltk * 100  # report it in percentage
 

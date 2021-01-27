@@ -141,3 +141,4 @@ vocab/
 models/
 job_outputs/
 en-de*
+.ipynb_checkpoints/

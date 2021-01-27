@@ -10,7 +10,6 @@ import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-import models
 import utils
 from batch_utils import *
 from gen_utils import *
@@ -292,7 +291,6 @@ def set_seed(seed):
         torch.cuda.manual_seed_all(seed)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
-    models.set_seed(seed)
 
 
 def init_weights(m):
@@ -341,6 +339,41 @@ def initialize_model(attention, encoder_emb_dim, decoder_emb_dim, encoder_hid_di
     return optimizer, criterion, model, suffix
 
 
+# def evaluate_test(task, coefficient, seed, model='best'):
+#     """
+#
+#     """
+#
+#     if model == 'best':
+#         # load the best model for the given settings
+#         pass
+#     elif model == 'latest':
+#         # load the latest model for the given settings
+#         pass
+#
+#     load_vocabulary(coefficient, task)
+#
+#     sentences = initialize_sentences(task, debug=False, num_train=100000, splits=SPLITS)
+#
+#     _, _, test_batches = get_batches_from_sentences(sentences, BATCH_SIZE, SRC_LANG, TRG_LANG)
+#
+#     criterion = nn.CrossEntropyLoss(ignore_index=PAD_IDX)
+#
+#     return evaluate(model, test_batches, criterion)
+
+
+def load_vocabulary(coefficient, task):
+    # load vocabulary if already present
+    vocab_prefix = DATA_PATH + task + '_coeff=' + str(coefficient)
+
+    src_vocab_path, trg_vocab_path = vocab_prefix + ".src.vocab", vocab_prefix + ".trg.vocab"
+
+    if os.path.exists(src_vocab_path):
+        SRC_LANG.load_vocab(src_vocab_path)
+    if os.path.exists(trg_vocab_path):
+        TRG_LANG.load_vocab(trg_vocab_path)
+
+
 def train(task=TASK,
           epochs=EPOCHS,
           coeff=COEFF,
@@ -368,14 +401,7 @@ def train(task=TASK,
                 f'task: {task}\n')
 
     # load vocabulary if already present
-    src_vocab_path = DATA_PATH + task + '_coeff=' + str(coeff) + ".src.vocab"
-    trg_vocab_path = DATA_PATH + task + '_coeff=' + str(coeff) + ".trg.vocab"
-
-    if os.path.exists(src_vocab_path):
-        SRC_LANG.load_vocab(src_vocab_path)
-
-    if os.path.exists(trg_vocab_path):
-        TRG_LANG.load_vocab(trg_vocab_path)
+    load_vocabulary(coeff, task)
 
     sentences = initialize_sentences(task, debug, num_train, SPLITS)
 
@@ -391,6 +417,8 @@ def train(task=TASK,
 
     no_improvement_last_time = False
 
+    model_path = f'{DATA_MODELS_PATH}model_{task}{suffix}_seed={str(seed)}_coeff={str(coeff)}_epoch=%s.pt'
+
     for epoch in range(epochs):
 
         start_time = time.time()
@@ -403,10 +431,6 @@ def train(task=TASK,
             writer.add_scalar("Accuracy/train", train_acc, epoch)
             writer.add_scalar("AttentionMass/train", train_attn_mass, epoch)
 
-            # writer.add_hparams({"lr": "learning_rate", "bsize": batch_size, "task": task, "coeff": coeff, "seed": seed},
-            #                    {})
-            # {'accuracy': train_acc, 'loss': train_loss})
-
             writer.add_scalar("Loss/valid", val_loss, epoch)
             writer.add_scalar("Accuracy/valid", val_acc, epoch)
             writer.add_scalar("AttentionMass/valid", val_attn_mass, epoch)
@@ -417,10 +441,8 @@ def train(task=TASK,
 
         if val_loss < best_valid_loss:
             best_valid_loss = val_loss
-            torch.save(model.state_dict(),
-                       DATA_MODELS_PATH + 'model_' + task + suffix + '_seed=' + str(seed) + '_coeff='
-                       + str(coeff) + '_num-train=' + str(num_train) + '.pt')
             epochs_taken_to_converge = epoch + 1
+            torch.save(model.state_dict(), model_path % epochs_taken_to_converge)
             convergence_time += (end_time - start_time)
             no_improvement_last_time = False
         else:
@@ -436,8 +458,7 @@ def train(task=TASK,
             |  Val. Attn Mass: {val_attn_mass:0.2f} |  Val. PPL: {math.exp(val_loss):7.3f}')
 
     # load the best model and print stats:
-    model.load_state_dict(torch.load(DATA_MODELS_PATH + 'model_' + task + suffix + '_seed=' + str(seed) + '_coeff='
-                                     + str(coeff) + '_num-train=' + str(num_train) + '.pt'))
+    model.load_state_dict(torch.load(model_path % epochs_taken_to_converge))
 
     test_loss, test_acc, test_attn_mass = evaluate(model, test_batches, criterion)
     logger.info(f'\t Test Loss: {test_loss:.3f} |  Test Acc: {test_acc:0.2f} \
@@ -458,7 +479,7 @@ def train(task=TASK,
         logger.info("Generating the output translations from the model.")
 
         translations_out_path = f"{DATA_TRANSLATIONS_PATH}{data_out_path}"
-        translations, src_sentences, bleu_score = generate_translations(model, sentences, logger)
+        translations, src_sentences, bleu_score = generate_translations(model, sentences)
 
         logger.info(f"BLEU score ..........\t{bleu_score:0.2f}")
 
@@ -483,12 +504,9 @@ def train(task=TASK,
         writer.close()
 
 
-def generate_translations(model, sentences, logger):
+def generate_translations(model, sentences):
     test_sentences = sentences[2]
     single_test_batch = list(get_batches(test_sentences, 1, SRC_LANG, TRG_LANG))
-
-    # logger.info(f'batch single {str(single_test_batch)}')
-    # logger.info(f'batch single length {str(len(single_test_batch))}')
 
     output_lines = generate(model, single_test_batch)
     target_sentences = get_target_sentences_as_list(single_test_batch, TRG_LANG)

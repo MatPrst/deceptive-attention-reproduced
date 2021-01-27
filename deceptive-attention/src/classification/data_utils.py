@@ -39,7 +39,6 @@ class Vocabulary(object):
 
 def read_data(task_name, model_type, logger, clip_vocab=False, block_words=None, to_anon=False, vocab_size=20000,
               use_block_file=False, use_attention_file=False):
-    logger.info(f"Reading data:\n\t{task_name}")
 
     vocabulary = Vocabulary(clip_vocab, vocab_size)
 
@@ -70,10 +69,10 @@ def read_data(task_name, model_type, logger, clip_vocab=False, block_words=None,
     else:
         if block_words is None:
             # log.pr_blue("Vanilla case: no attention manipulation")
-            logger.info("Vanilla case: no attention manipulation")
+            logger.info("Vanilla case: no attention manipulation.\n")
         else:
             # log.pr_blue("Using block words")
-            logger.info(f"Using block words:\n\t{block_words}")
+            logger.info(f"Using block words:\n\t{block_words}\n")
 
         block_w = block_words
 

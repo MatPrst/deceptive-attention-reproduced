@@ -75,6 +75,7 @@ class EmbAttModel(nn.Module):
         weights = self.weight_layer(emb_output)  # shape(weights)   : B x W x 1
         weights = weights.squeeze(-1)  # shape(weights)   : B x W
         attentions = nn.Softmax(dim=-1)(weights)  # shape(attention) : B x W
+
         # NOTE: ensure block_ids are right tensors
         if block_ids is not None:
             attentions = (1 - block_ids) * attentions
@@ -107,6 +108,55 @@ class BiLSTMAttModel(nn.Module):
 
         self.embedding_dim = emb_dim
         self.w2i = vocabulary.w2i
+
+        # workaround for LIME to work with out code (we need the block_ids for evaluation, which LIME does not pass)
+        self.data_instance = None
+
+    def data_instance_for_prediction(self, data_instance):
+        self.data_instance = data_instance
+
+    def predict_probabilities(self, lime_instance):
+
+        # data_instance: perturbed data, 2d array. first element is assumed to be the original data point.
+        # we now make predictions for all these data points
+        all_predictions = []
+
+        # transform sentence into indices
+        original_sentence = lime_instance[0]
+        indices = [self.w2i[w] for w in original_sentence.split()]
+
+        block_ids_t, w_indices = None, None
+        if self.data_instance is not None:
+
+            _, w_indices, block_ids, _, _ = self.data_instance
+
+            # original data instance indices should match
+            # assert w_indices == self.data_instance[1]
+
+            if w_indices == indices:
+                w_indices = torch.tensor([w_indices]).type(LONG_TYPE)
+                block_ids_t = torch.tensor([block_ids]).type(FLOAT_TYPE)
+
+        if w_indices is None:
+            w_indices = torch.tensor([indices]).type(LONG_TYPE)
+
+        pred, _ = self.forward(w_indices, block_ids_t)
+        prediction_probabilities = pred[0].softmax(dim=0)
+        all_predictions.append(prediction_probabilities.detach().numpy())
+
+        # predict all other samples without block_ids (because we don't know them)
+        for instance in lime_instance[1:]:
+            indices = [self.w2i[w] for w in instance.split()]
+            indices = torch.tensor([indices]).type(LONG_TYPE)
+
+            pred, _ = self.forward(indices)
+
+            all_predictions.append(pred[0].softmax(dim=0).detach().numpy())
+
+        # check that we have predictions for all neighborhood examples
+        assert len(lime_instance) == len(all_predictions)
+
+        return np.array(all_predictions)
 
     def forward(self, inp, block_ids=None):  # shape(inp)       : B x W
         emb_output = self.embedding_layer(inp)  # shape(emb_output): B x W x emd_dim

@@ -1,6 +1,0 @@
---num-epochs 5 --num-visualize 5 --loss-hammer 0.0 --model emb-att --block-words he she her his him himself herself --task pronoun --seed 1
---num-epochs 5 --num-visualize 5 --loss-hammer 0.1 --model emb-att --block-words he she her his him himself herself --task pronoun --seed 1
---num-epochs 5 --num-visualize 5 --loss-hammer 1.0 --model emb-att --block-words he she her his him himself herself --task pronoun --seed 1
---num-epochs 5 --num-visualize 5 --loss-hammer 0.0 --model emb-lstm-att --block-words he she her his him himself herself --task pronoun --seed 1
---num-epochs 5 --num-visualize 5 --loss-hammer 0.1 --model emb-lstm-att --block-words he she her his him himself herself --task pronoun --seed 1
---num-epochs 5 --num-visualize 5 --loss-hammer 1.0 --model emb-lstm-att --block-words he she her his him himself herself --task pronoun --seed 1

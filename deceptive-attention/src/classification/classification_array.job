@@ -18,7 +18,7 @@ module load Anaconda3
 
 source activate attention
 
-PARAMETERS_FILE=parameters_lime2.txt
+PARAMETERS_FILE=parameters.txt
 
 srun python -u main.py $(head -$SLURM_ARRAY_TASK_ID $PARAMETERS_FILE | tail -1)
 

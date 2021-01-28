@@ -3,18 +3,18 @@ import numpy as np
 from data_utils import read_data
 from train_utils import get_trained_model, DATA_MODELS_PATH
 
-BEST_EPOCHS = {'emb-att-occupation-classification-0.0': 5,
+BEST_EPOCHS = {'emb-att-occupation-classification-0.0': 2,
                'emb-att-occupation-classification-0.1': 1,
                'emb-att-occupation-classification-1.0': 1,
-               'emb-lstm-att-occupation-classification-0.0': 5,
-               'emb-lstm-att-occupation-classification-0.1': 5,
-               'emb-lstm-att-occupation-classification-1.0': 5,
+               'emb-lstm-att-occupation-classification-0.0': 4,
+               'emb-lstm-att-occupation-classification-0.1': 2,
+               'emb-lstm-att-occupation-classification-1.0': 2,
                'emb-att-pronoun-0.0': 1,
                'emb-att-pronoun-0.1': 1,
                'emb-att-pronoun-1.0': 1,
-               'emb-lstm-att-pronoun-0.0': 5,
-               'emb-lstm-att-pronoun-0.1': 5,
-               'emb-lstm-att-pronoun-1.0': 5}
+               'emb-lstm-att-pronoun-0.0': 1,
+               'emb-lstm-att-pronoun-0.1': 1,
+               'emb-lstm-att-pronoun-1.0': 1}
 
 BLOCK_WORDS = ['he', 'she', 'her', 'his', 'him', 'himself', 'herself', 'hers', 'mr', 'mrs', 'ms', 'mr.', 'mrs.', 'ms.']
 CLASS_NAMES = ['surgeon', 'non-surgeon']

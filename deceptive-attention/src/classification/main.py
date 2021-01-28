@@ -129,7 +129,7 @@ LOGGER.info(f"Seed: {SEED}\n")
 set_seed(SEED)
 
 # READING THE DATA
-
+LOGGER.info(f"Reading data:\n\t{TASK_NAME}")
 TRAIN, DEV, TEST, VOCABULARY = read_data(TASK_NAME, MODEL_TYPE, LOGGER, CLIP_VOCAB, BLOCK_WORDS, TO_ANON, VOCAB_SIZE,
                                          USE_BLOCK_FILE, USE_ATTN_FILE)
 
@@ -147,8 +147,8 @@ optimizer = torch.optim.Adam(current_model.parameters())
 
 LOGGER.info(f"\nEvaluating without any training ...")
 LOGGER.info(f"ITER: {0}")
-_, _ = evaluate(current_model, TEST, VOCABULARY, LOSS_CONFIG, UNDERSTAND, FLOW, LOGGER,
-                stage='test', attn_stats=True, num_vis=0)
+_, _ = evaluate(current_model, TEST, VOCABULARY, LOSS_CONFIG, UNDERSTAND, FLOW, LOGGER, stage='test',
+                attn_stats=True, num_vis=0)
 
 WRITER = None
 if TENSORBOARD:
@@ -160,6 +160,7 @@ best_dev_accuracy = 0.
 best_dev_loss = np.inf
 best_test_accuracy = 0.
 best_epoch = 0
+best_model_state_dict = None
 
 for ITER in range(1, NUM_EPOCHS + 1):
     LOGGER.info(f"ITER: {ITER}")
@@ -254,6 +255,7 @@ for ITER in range(1, NUM_EPOCHS + 1):
             best_dev_accuracy = dev_acc
         best_test_accuracy = test_acc
         best_epoch = ITER
+        best_model_state_dict = current_model.state_dict().copy()
 
         if TO_DUMP_ATTN:
             # log.pr_bmagenta("dumping attention maps")
@@ -264,6 +266,7 @@ for ITER in range(1, NUM_EPOCHS + 1):
 
     LOGGER.info(f"best test accuracy = {best_test_accuracy:0.4f} attained after epoch = {best_epoch}\n")
 
-    # save the trained model
+# save the trained model
+if best_model_state_dict is not None:
     LOGGER.info("Saving trained model.\n")
-    torch.save(current_model.state_dict(), get_model_path(LOSS_CONFIG, best_epoch, MODEL_TYPE, SEED, TASK_NAME))
+    torch.save(best_model_state_dict, get_model_path(LOSS_CONFIG, best_epoch, MODEL_TYPE, SEED, TASK_NAME))

@@ -23,7 +23,7 @@ import logging
 import os
 import random
 import sys
-sys.path.append(os.path.join(os.getcwd(), 'pytorch-pretrained-BERT'))
+#sys.path.append(os.path.join(os.getcwd(), 'pytorch-pretrained-BERT'))
 
 import numpy as np
 import torch
@@ -64,6 +64,9 @@ class InputExample(object):
         self.text_b = text_b
         self.label = label
         self.block = block
+    
+    def __str__(self):
+        return "InputExample(\n\t" + f"guid={self.guid}\n\t" + f"text_a={self.text_a}\n\t" + f"text_b={self.text_b}\n\t" + f"label={self.label}\n\t" + f"block={self.block}\n)"
 
 
 class InputFeatures(object):
@@ -113,16 +116,24 @@ class SstWikiProcessor(DataProcessor):
 
     def get_train_examples(self, data_dir, limit=0):
         """See base class."""
+        # ret = self._create_examples(
+        #     SstWikiProcessor._read_txt(os.path.join(data_dir, "train.txt")), "train")
         ret = self._create_examples(
-            SstWikiProcessor._read_txt(os.path.join(data_dir, "train.txt")), "train")
+            SstWikiProcessor._read_txt(os.path.join(data_dir, "train.txt")),
+            SstWikiProcessor._read_txt(os.path.join(data_dir, "train.txt.block")),
+        "train")
         if limit:
             ret = ret[0:limit]
         return ret
 
     def get_dev_examples(self, data_dir, limit=0):
         """See base class."""
+        # ret = self._create_examples(
+        #     SstWikiProcessor._read_txt(os.path.join(data_dir, "dev.txt")), "dev")
         ret = self._create_examples(
-            SstWikiProcessor._read_txt(os.path.join(data_dir, "dev.txt")), "dev")
+            SstWikiProcessor._read_txt(os.path.join(data_dir, "dev.txt")),
+            SstWikiProcessor._read_txt(os.path.join(data_dir, "dev.txt.block")),
+        "dev")
         if limit:
             ret = ret[0:limit]
         return ret
@@ -130,8 +141,12 @@ class SstWikiProcessor(DataProcessor):
 
     def get_test_examples(self, data_dir, limit=0):
         """See base class."""
+        # ret = self._create_examples(
+        #     SstWikiProcessor._read_txt(os.path.join(data_dir, "test.txt")), "test")
         ret = self._create_examples(
-            SstWikiProcessor._read_txt(os.path.join(data_dir, "test.txt")), "test")
+            SstWikiProcessor._read_txt(os.path.join(data_dir, "test.txt")),
+            SstWikiProcessor._read_txt(os.path.join(data_dir, "test.txt.block")),
+        "test")
         if limit:
             ret = ret[0:limit]
         return ret
@@ -140,7 +155,7 @@ class SstWikiProcessor(DataProcessor):
         """See base class."""
         return ["0", "1"]
 
-    def _create_examples(self, lines, set_type):
+    def _create_examples(self, lines, block_lines, set_type):
         """Creates examples for the training and dev sets."""
         examples = []
         for (i, line) in enumerate(lines):
@@ -150,13 +165,14 @@ class SstWikiProcessor(DataProcessor):
             text_sst = text_split[0].strip()
             text_wiki = text_split[1].strip() 
             label = label_text[0]
+            block = block_lines[i]
             examples.append(
-                InputExample(guid=guid, text_a=text_wiki, text_b=text_sst, label=label))
+                InputExample(guid=guid, text_a=text_wiki, text_b=text_sst, label=label, block=block))
         return examples
 
 class PronounProcessor(DataProcessor):
     """Processor for the Pronoun data set (sentence level)."""
-
+    
     def get_train_examples(self, data_dir, limit=0):
         """See base class."""
         ret = self._create_examples(
@@ -205,8 +221,34 @@ class PronounProcessor(DataProcessor):
                 InputExample(guid=guid, text_a=text, text_b=None, label=label, block=block))
         return examples
 
+def anonymize_text(text):
+    gender_replacements = {
+        "he": "they",
+        "she": "they",
+        "her": "their",
+        "his": "their",
+        "him": "them",
+        "himself": "themself",
+        "herself": "themself",
+        "hers": "their",
+        "mr": "",
+        "mrs": "",
+        "ms": "",
+        "mr.": "",
+        "mrs.": "",
+        "ms.": ""
+    }
+
+    anon_words = []
+    for word in text.split():
+        if word in gender_replacements:
+            anon_words.append(gender_replacements[word])
+        else:
+            anon_words.append(word)
+    return " ".join(anon_words)
+
 def convert_examples_to_features(examples, label_list, max_seq_length,
-                                 tokenizer, output_mode):
+                                 tokenizer, output_mode, anonymize, processor_type):
     """Loads a data file into a list of `InputBatch`s."""
 
     label_map = {label : i for i, label in enumerate(label_list)}
@@ -216,14 +258,22 @@ def convert_examples_to_features(examples, label_list, max_seq_length,
         if ex_index % 10000 == 0:
             logger.info("Writing example %d of %d" % (ex_index, len(examples)))
 
+        if anonymize:
+            if processor_type == "pronoun":
+                example.text_a = anonymize_text(example.text_a)
+            elif processor_type == "sst-wiki":
+                example.text_a = example.text_b
+                example.text_b = None
+        
         tokens_a = tokenizer.tokenize(example.text_a)
 
-        if example.block:
+        if example.block and processor_type == "pronoun":
             #segment_ids = [int(item) for item in example.block.split()]
             pronoun_list = ["her", "his", "him", "she", "he", "herself", "himself", "hers", "mr", "mrs", "ms", "mr.", "mrs.", "ms."]
             segment_ids = [1 if token.lower() in pronoun_list else 0 for token in tokens_a]
         else:
             segment_ids = [0]*len(tokens_a)
+
 
         tokens_b = None
         if example.text_b:
@@ -284,16 +334,16 @@ def convert_examples_to_features(examples, label_list, max_seq_length,
         else:
             raise KeyError(output_mode)
 
-        if ex_index < 5:
-            logger.info("*** Example ***")
-            logger.info("guid: %s" % (example.guid))
-            logger.info("tokens: %s" % " ".join(
-                    [str(x) for x in tokens]))
-            logger.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
-            logger.info("input_mask: %s" % " ".join([str(x) for x in input_mask]))
-            logger.info(
-                    "segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
-            logger.info("label: %s (id = %d)" % (example.label, label_id))
+        # if ex_index < 5:
+        #     logger.info("*** Example ***")
+        #     logger.info("guid: %s" % (example.guid))
+        #     logger.info("tokens: %s" % " ".join(
+        #             [str(x) for x in tokens]))
+        #     logger.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
+        #     logger.info("input_mask: %s" % " ".join([str(x) for x in input_mask]))
+        #     logger.info(
+        #             "segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
+        #     logger.info("label: %s (id = %d)" % (example.label, label_id))
 
         features.append(
                 InputFeatures(input_ids=input_ids,
@@ -499,7 +549,11 @@ def main():
                         action='store_true')
     parser.add_argument("--name",
                         type=str)
+    parser.add_argument('--anonymize',
+                        action='store_true',
+                        help="Replace gender pronouns by gender-neutral ones (Occupation pred. and Pronoun dataset) or remove SST sentence (SST+Wiki dataset)")
     args = parser.parse_args()
+    print(args.anonymize)
 
     if args.server_ip and args.server_port:
         # Distant debugging - see https://code.visualstudio.com/docs/python/debugging#_attach-to-a-local-script
@@ -645,11 +699,11 @@ def main():
     tr_loss = 0
     if args.do_train:
         train_features = convert_examples_to_features(
-            train_examples, label_list, args.max_seq_length, tokenizer, output_mode)
+            train_examples, label_list, args.max_seq_length, tokenizer, output_mode, args.anonymize, input_processor_type)
         logger.info("***** Running training *****")
-        logger.info("  Num examples = %d", len(train_examples))
-        logger.info("  Batch size = %d", args.train_batch_size)
-        logger.info("  Num steps = %d", num_train_optimization_steps)
+        # logger.info("  Num examples = %d", len(train_examples))
+        # logger.info("  Batch size = %d", args.train_batch_size)
+        # logger.info("  Num steps = %d", num_train_optimization_steps)
         all_input_ids = torch.tensor([f.input_ids for f in train_features], dtype=torch.long)
         all_input_mask = torch.tensor([f.input_mask for f in train_features], dtype=torch.long)
         all_segment_ids = torch.tensor([f.segment_ids for f in train_features], dtype=torch.long)
@@ -671,7 +725,7 @@ def main():
             nb_tr_examples, nb_tr_steps = 0, 0
             
             if epoch > 0:
-                for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
+                for step, batch in enumerate(train_dataloader):
                     batch = tuple(t.to(device) for t in batch)
                     input_ids, input_mask, segment_ids, label_ids = batch
 
@@ -767,10 +821,10 @@ def run_evaluation(args, processor, label_list, tokenizer, output_mode, epoch,
         else:
             eval_examples = processor.get_test_examples(args.data_dir, limit)
         eval_features = convert_examples_to_features(
-            eval_examples, label_list, args.max_seq_length, tokenizer, output_mode)
+            eval_examples, label_list, args.max_seq_length, tokenizer, output_mode, args.anonymize, input_processor_type)
         logger.info("***** Running evaluation on " + typ + " data*****")
-        logger.info("  Num examples = %d", len(eval_examples))
-        logger.info("  Batch size = %d", args.eval_batch_size)
+        # logger.info("  Num examples = %d", len(eval_examples))
+        # logger.info("  Batch size = %d", args.eval_batch_size)
         all_input_ids = torch.tensor([f.input_ids for f in eval_features], dtype=torch.long)
         all_input_mask = torch.tensor([f.input_mask for f in eval_features], dtype=torch.long)
         all_segment_ids = torch.tensor([f.segment_ids for f in eval_features], dtype=torch.long)
@@ -796,7 +850,7 @@ def run_evaluation(args, processor, label_list, tokenizer, output_mode, epoch,
 
         tmp_vnfs = [0., 0., 0.]
 
-        for input_ids, input_mask, segment_ids, label_ids in tqdm(eval_dataloader, desc="Evaluating"):
+        for input_ids, input_mask, segment_ids, label_ids in eval_dataloader:
             input_ids = input_ids.to(device)
             input_mask = input_mask.to(device)
             segment_ids = segment_ids.to(device)

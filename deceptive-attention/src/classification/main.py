@@ -357,7 +357,7 @@ def run_all_experiments():
             data["sst-wiki att-mass"].append(mean(sst_metric["att_mass"]))
             clear_output(wait=True)
 
-            occupation_metric = run_occupation_experiment(model, 15, anonymize, seeds, hammer_loss)
+            occupation_metric = run_occupation_experiment(model, 5, anonymize, seeds, hammer_loss)
             data["occupation acc"].append(mean(occupation_metric["acc"]))
             data["occupation att-mass"].append(mean(occupation_metric["att_mass"]))
             clear_output(wait=True)

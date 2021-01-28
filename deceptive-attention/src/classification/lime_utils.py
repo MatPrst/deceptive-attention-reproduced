@@ -1,8 +1,8 @@
 import numpy as np
+from IPython.display import clear_output
 
 from data_utils import read_data
-from train_utils import get_trained_model, DATA_MODELS_PATH
-from IPython.display import clear_output
+from train_utils import get_trained_model
 
 BEST_EPOCHS = {'emb-att-occupation-classification-0.0': 2,
                'emb-att-occupation-classification-0.1': 1,

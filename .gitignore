@@ -138,9 +138,7 @@ dmypy.json
 logs/
 tensorboard/
 vocab/
-dev.*
-test.*
-train.*
+models/
 job_outputs/
 en-de*
 .ipynb_checkpoints/

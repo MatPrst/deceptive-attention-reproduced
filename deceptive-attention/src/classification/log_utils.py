@@ -11,6 +11,7 @@ def setup_logger(log_path=None, file_name_suffix=None, detailed=False):
     format = "%(asctime)s  [%(levelname)-5.5s]  %(message)s" if detailed else "%(message)s"
     log_formatter = logging.Formatter(format, "%Y-%m-%d %H:%M:%S")
     root_logger = logging.getLogger()
+    root_logger.handlers[:] = []
 
     if log_path is not None and file_name_suffix is not None:
         file_name = f'{datetime.datetime.now():%Y%m%d_%H%M}_{file_name_suffix}'

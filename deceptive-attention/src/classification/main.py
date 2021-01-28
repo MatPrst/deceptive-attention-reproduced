@@ -268,6 +268,7 @@ def run_experiment(
 def run_sstwiki_experiment(model_type, num_epochs, anonymize, seed, hammer_loss):
     assert model_type in ["emb-att", "emb-lstm-att"], "model type should be: emb-att or emb-lstm-att"
 
+    metrics = None
     if type(seed) is int:
         acc, att_mass = run_experiment("sst-wiki", model_type, num_epochs, None, True, anonymize, seed, hammer_loss)
         metrics = {"acc": acc, "att_mass": att_mass}
@@ -285,6 +286,7 @@ def run_occupation_experiment(model_type, num_epochs, anonymize, seed, hammer_lo
 
     block_words = "he she her his him himself herself hers mr mrs ms mr. mrs. ms."
     
+    metrics = None
     if type(seed) is int: 
         acc, att_mass = run_experiment("occupation-classification", model_type, num_epochs, block_words, False, anonymize, seed, hammer_loss, clip_vocab=True)
         metrics = {"acc": acc, "att_mass": att_mass}
@@ -303,6 +305,7 @@ def run_pronoun_experiment(model_type, num_epochs, anonymize, seed, hammer_loss)
 
     block_words = "he she her his him himself herself"
     
+    metrics = None
     if type(seed) is int: 
         acc, att_mass = run_experiment("pronoun", model_type, num_epochs, block_words, False, anonymize, seed, hammer_loss)
         metrics = {"acc": acc, "att_mass": att_mass}
@@ -315,6 +318,57 @@ def run_pronoun_experiment(model_type, num_epochs, anonymize, seed, hammer_loss)
             metrics["att_mass"].append(att_mass)
     
     return metrics
+
+
+def run_all_experiments():
+    from IPython.display import clear_output
+    import pandas as pd
+
+    seeds = [1, 2, 3, 4, 5]
+    lambdas = [0.0, 0.0, 0.1, 1.0]
+    models = ["emb-att", "emb-lstm-att"]
+    anonymization = [True, False, False, False]
+
+    data = {
+        "model": [],
+        "$\lambda$": [],
+        "I": [],
+        "occupation acc": [],
+        "occupation att-mass": [],
+        "gender acc": [],
+        "gender att-mass": [],
+        "sst-wiki acc": [],
+        "sst-wiki att-mass": [],
+    }
+
+    names = {
+        "emb-att": "Embedding",
+        "emb-lstm-att": "BiLSTM"
+    }
+
+    for model in models:
+        for hammer_loss, anonymize in zip(lambdas, anonymization):
+            data["model"].append(names[model])
+            data["$\lambda$"].append(hammer_loss)
+            data["I"].append(f"{'not-' if not anonymize else ''}anonymized")
+
+            sst_metric = run_sstwiki_experiment(model, 15, anonymize, seeds, hammer_loss)
+            data["sst-wiki acc"].append(mean(sst_metric["acc"]))
+            data["sst-wiki att-mass"].append(mean(sst_metric["att_mass"]))
+            clear_output(wait=True)
+
+            occupation_metric = run_occupation_experiment(model, 15, anonymize, seeds, hammer_loss)
+            data["occupation acc"].append(mean(occupation_metric["acc"]))
+            data["occupation att-mass"].append(mean(occupation_metric["att_mass"]))
+            clear_output(wait=True)
+
+            pronoun_metric = run_pronoun_experiment(model, 15, anonymize, seeds, hammer_loss)
+            data["gender acc"].append(mean(pronoun_metric["acc"]))
+            data["gender att-mass"].append(mean(pronoun_metric["att_mass"]))
+            clear_output(wait=True)
+    
+    print("finished")
+    return pd.DataFrame(data)
 
 
 if __name__ == "__main__":

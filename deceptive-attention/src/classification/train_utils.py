@@ -238,6 +238,9 @@ def entropy(p):
 def calc_entropy_loss(p, beta):
     return -1 * beta * entropy(p)
 
+def mean(data):
+    return sum(data) / len(data)
+
 
 def dump_attention_maps(model, dataset, filename):
     fw = open(filename, 'w')

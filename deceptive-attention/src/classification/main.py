@@ -157,7 +157,7 @@ def run_experiment(
 
     LOGGER.info(f"\nEvaluating without any training ...")
     LOGGER.info(f"ITER: {0}")
-    _, _ = evaluate(current_model, TEST, VOCABULARY, loss_config, understand, False, LOGGER,
+    _, _, _ = evaluate(current_model, TEST, VOCABULARY, loss_config, understand, False, LOGGER,
                     stage='test', attn_stats=True, num_vis=0)
 
     WRITER = None
@@ -169,6 +169,7 @@ def run_experiment(
     best_dev_accuracy = 0.
     best_dev_loss = np.inf
     best_test_accuracy = 0.
+    best_att_mass = 0.
     best_epoch = 0
 
     for ITER in range(1, num_epochs + 1):
@@ -226,10 +227,10 @@ def run_experiment(
                     % (avg_train_loss, avg_train_ce_loss, avg_train_entropy_loss, avg_train_hammer_loss, avg_train_kld_loss,
                     epoch_duration))
 
-        train_acc, train_loss = evaluate(current_model, TRAIN, VOCABULARY, loss_config, logger=LOGGER, stage='train')
-        dev_acc, dev_loss = evaluate(current_model, DEV, VOCABULARY, loss_config, logger=LOGGER, stage='dev',
+        train_acc, train_loss, train_att_mass = evaluate(current_model, TRAIN, VOCABULARY, loss_config, logger=LOGGER, stage='train')
+        dev_acc, dev_loss, dev_att_mass = evaluate(current_model, DEV, VOCABULARY, loss_config, logger=LOGGER, stage='dev',
                                     attn_stats=True)
-        test_acc, test_loss = evaluate(current_model, TEST, VOCABULARY, loss_config, logger=LOGGER, stage='test',
+        test_acc, test_loss, test_att_mass = evaluate(current_model, TEST, VOCABULARY, loss_config, logger=LOGGER, stage='test',
                                     attn_stats=True, num_vis=0)
 
         if WRITER is not None:
@@ -253,29 +254,67 @@ def run_experiment(
             else:
                 best_dev_accuracy = dev_acc
             best_test_accuracy = test_acc
+            best_att_mass = test_att_mass
             best_epoch = ITER
 
-        LOGGER.info(f"best test accuracy = {best_test_accuracy:0.4f} attained after epoch = {best_epoch}\n")
+        LOGGER.info(f"best test accuracy = {best_test_accuracy:0.4f}, attention mass = {best_att_mass:0.4f} attained after epoch = {best_epoch}\n")
 
         # save the trained model
         LOGGER.info("Saving trained model.\n")
         torch.save(current_model.state_dict(), get_model_path(loss_config, best_epoch, model_type, seed, task_name))
+    
+    return best_test_accuracy, best_att_mass
 
 def run_sstwiki_experiment(model_type, num_epochs, anonymize, seed, hammer_loss):
     assert model_type in ["emb-att", "emb-lstm-att"], "model type should be: emb-att or emb-lstm-att"
-    run_experiment("sst-wiki", model_type, num_epochs, None, True, anonymize, seed, hammer_loss)
+
+    if type(seed) is int:
+        acc, att_mass = run_experiment("sst-wiki", model_type, num_epochs, None, True, anonymize, seed, hammer_loss)
+        metrics = {"acc": acc, "att_mass": att_mass}
+    elif type(seed) is list:
+        metrics = {"acc": [], "att_mass": []}
+        for s in seed:
+            acc, att_mass = run_experiment("sst-wiki", model_type, num_epochs, None, True, anonymize, s, hammer_loss)
+            metrics["acc"].append(acc)
+            metrics["att_mass"].append(att_mass)
+    
+    return metrics
 
 def run_occupation_experiment(model_type, num_epochs, anonymize, seed, hammer_loss):
     assert model_type in ["emb-att", "emb-lstm-att"], "model type should be: emb-att or emb-lstm-att"
 
     block_words = "he she her his him himself herself hers mr mrs ms mr. mrs. ms."
-    run_experiment("occupation-classification", model_type, num_epochs, block_words, False, anonymize, seed, hammer_loss, clip_vocab=True)
+    
+    if type(seed) is int: 
+        acc, att_mass = run_experiment("occupation-classification", model_type, num_epochs, block_words, False, anonymize, seed, hammer_loss, clip_vocab=True)
+        metrics = {"acc": acc, "att_mass": att_mass}
+    
+    elif type(seed) is list:
+        metrics = {"acc": [], "att_mass": []}
+        for s in seed:
+            acc, att_mass = run_experiment("occupation-classification", model_type, num_epochs, block_words, False, anonymize, s, hammer_loss, clip_vocab=True)
+            metrics["acc"].append(acc)
+            metrics["att_mass"].append(att_mass)
+    
+    return metrics
 
 def run_pronoun_experiment(model_type, num_epochs, anonymize, seed, hammer_loss):
     assert model_type in ["emb-att", "emb-lstm-att"], "model type should be: emb-att or emb-lstm-att"
 
     block_words = "he she her his him himself herself"
-    run_experiment("pronoun", model_type, num_epochs, block_words, False, anonymize, seed, hammer_loss)
+    
+    if type(seed) is int: 
+        acc, att_mass = run_experiment("pronoun", model_type, num_epochs, block_words, False, anonymize, seed, hammer_loss)
+        metrics = {"acc": acc, "att_mass": att_mass}
+    
+    elif type(seed) is list:
+        metrics = {"acc": [], "att_mass": []}
+        for s in seed:
+            acc, att_mass = run_experiment("pronoun", model_type, num_epochs, block_words, False, anonymize, s, hammer_loss)
+            metrics["acc"].append(acc)
+            metrics["att_mass"].append(att_mass)
+    
+    return metrics
 
 
 if __name__ == "__main__":

@@ -193,11 +193,12 @@ def evaluate(model, dataset, vocabulary, loss_config, understand=False, flow=Fal
 
     accuracy = test_correct / len(dataset)
     loss = total_loss / len(dataset)
+    att_mass = test_attn_prop / len(dataset)
 
     logger.info(f"Stage {stage}: acc = {accuracy * 100.:.2f}")
     logger.info(f"Stage {stage}: loss = {loss:.8f}\n")
 
-    return accuracy, loss
+    return accuracy, loss, att_mass
 
 
 def quantify_attention(ix, p, block_ids):

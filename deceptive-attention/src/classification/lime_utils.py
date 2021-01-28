@@ -59,7 +59,7 @@ def fool_lime_with_models(model_type, task, explainer, num_explanations=1, insta
 
             # get trained model
             best_epoch = BEST_EPOCHS['-'.join([model_type, task, str(regularization)])]
-            model_path = f'{DATA_MODELS_PATH}model={model_type}_task={task}_epoch={best_epoch}_seed=1_hammer=' \
+            model_path = f'{DATA_MODELS_PATH}lime/model={model_type}_task={task}_epoch={best_epoch}_seed=1_hammer=' \
                          f'{regularization:0.2f}_rand-entropy=0.00.pt'
             model = get_trained_model(model_path, vocabulary)
 

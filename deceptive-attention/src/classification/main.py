@@ -261,5 +261,22 @@ def run_experiment(
         LOGGER.info("Saving trained model.\n")
         torch.save(current_model.state_dict(), get_model_path(loss_config, best_epoch, model_type, seed, task_name))
 
+def run_sstwiki_experiment(model_type, num_epochs, anonymize, seed, hammer_loss):
+    assert model_type in ["emb-att", "emb-lstm-att"], "model type should be: emb-att or emb-lstm-att"
+    run_experiment("sst-wiki", model_type, num_epochs, None, True, anonymize, seed, hammer_loss)
+
+def run_occupation_experiment(model_type, num_epochs, anonymize, seed, hammer_loss):
+    assert model_type in ["emb-att", "emb-lstm-att"], "model type should be: emb-att or emb-lstm-att"
+
+    block_words = "he she her his him himself herself hers mr mrs ms mr. mrs. ms."
+    run_experiment("occupation-classification", model_type, num_epochs, block_words, False, anonymize, seed, hammer_loss, clip_vocab=True)
+
+def run_pronoun_experiment(model_type, num_epochs, anonymize, seed, hammer_loss):
+    assert model_type in ["emb-att", "emb-lstm-att"], "model type should be: emb-att or emb-lstm-att"
+
+    block_words = "he she her his him himself herself"
+    run_experiment("pronoun", model_type, num_epochs, block_words, False, anonymize, seed, hammer_loss)
+
+
 if __name__ == "__main__":
     main()

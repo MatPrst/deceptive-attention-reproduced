@@ -147,8 +147,8 @@ optimizer = torch.optim.Adam(current_model.parameters())
 
 LOGGER.info(f"\nEvaluating without any training ...")
 LOGGER.info(f"ITER: {0}")
-_, _ = evaluate(current_model, TEST, VOCABULARY, LOSS_CONFIG, UNDERSTAND, FLOW, LOGGER,
-                stage='test', attn_stats=True, num_vis=0)
+_, _ = evaluate(current_model, TEST, VOCABULARY, LOSS_CONFIG, UNDERSTAND, FLOW, LOGGER, stage='test',
+                attn_stats=True, num_vis=0)
 
 WRITER = None
 if TENSORBOARD:

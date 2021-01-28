@@ -30,7 +30,7 @@ def fool_lime_with_models(model_type, task, explainer, num_explanations=1, insta
     if clear_out:
         clear_output(wait=True)
 
-    clip_vocab = model_type is not 'emb-att'
+    clip_vocab = task == 'occupation-classification'
 
     # read data
     _, _, dataset, vocabulary = read_data(task, model_type, block_words=BLOCK_WORDS, clip_vocab=clip_vocab)

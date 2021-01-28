@@ -28,7 +28,7 @@ from utils import *
 # --------------- parse the flags etc ----------------- #
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-parser.add_argument('--task', dest='task', default='en-de',
+parser.add_argument('--task', dest='task', default='copy',
                     choices=('copy', 'reverse-copy', 'binary-flip', 'en-hi', 'en-de'),
                     help='select the task you want to run on')
 

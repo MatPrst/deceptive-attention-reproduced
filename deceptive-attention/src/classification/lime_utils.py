@@ -2,6 +2,7 @@ import numpy as np
 
 from data_utils import read_data
 from train_utils import get_trained_model, DATA_MODELS_PATH
+from IPython.display import clear_output
 
 BEST_EPOCHS = {'emb-att-occupation-classification-0.0': 2,
                'emb-att-occupation-classification-0.1': 1,
@@ -24,9 +25,15 @@ def get_as_sentence(w_indices, vocabulary):
     return ' '.join([vocabulary.i2w[index] for index in w_indices])
 
 
-def fool_lime_with_models(model_type, task, explainer, num_explanations=1, instance_indices=None, regularisations=None):
+def fool_lime_with_models(model_type, task, explainer, num_explanations=1, instance_indices=None, regularisations=None,
+                          clear_out=False):
+    if clear_out:
+        clear_output(wait=True)
+
+    clip_vocab = model_type is not 'emb-att'
+
     # read data
-    _, _, dataset, vocabulary = read_data(task, model_type, block_words=BLOCK_WORDS, clip_vocab=True)
+    _, _, dataset, vocabulary = read_data(task, model_type, block_words=BLOCK_WORDS, clip_vocab=clip_vocab)
 
     # pick the data instances we want to explain
     if instance_indices is None:
@@ -66,11 +73,5 @@ def fool_lime_with_models(model_type, task, explainer, num_explanations=1, insta
             print('True class: %s\n' % CLASS_NAMES[target])
 
             explanation = explainer.explain_instance(sentence, model.predict_probabilities, num_features=6)
-
-            print('Explaining this prediction ...')
-
             explanation.as_list()
-
-            #             fig = explanation.as_pyplot_figure()
-            #             explanation.show_in_notebook(text=False)
             explanation.show_in_notebook(text=True)

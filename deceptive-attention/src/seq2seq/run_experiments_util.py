@@ -187,10 +187,10 @@ def run_synthetic_experiments(clear_out=False, stage='train', seeds=None, tasks=
 
     if tasks is None:
         tasks = ['copy', 'reverse-copy', 'binary-flip']
-        coefficients = [0.0, 1.0, 0.1]
+        coefficients = [0.0, 0.1, 1.0, 0.0, 0.0]
 
     if attentions is None:
-        attentions = ['dot-product', 'uniform', 'no-attention']
+        attentions = ['dot-product', 'dot-product', 'dot-product', 'uniform', 'no-attention']
 
     if epochs is None:
         epochs = 30
@@ -207,9 +207,9 @@ def run_synthetic_experiments(clear_out=False, stage='train', seeds=None, tasks=
     }
 
     attention_names = {
-        attentions[0]: "Dot-Product",
-        attentions[1]: attentions[1].capitalize(),
-        attentions[2]: "None"
+        "dot-product": "Dot-Product",
+        "uniform": "Uniform",
+        "no-attention": "None"
     }
 
     task_names = {
@@ -217,23 +217,46 @@ def run_synthetic_experiments(clear_out=False, stage='train', seeds=None, tasks=
         tasks[1]: "Sequence Reverse",
         tasks[2]: "Bigram Flip"
     }
+    print(coefficients)
+    for attention, coefficient in zip(attentions, coefficients):
+        data["Attention"].append(attention_names[attention])
+        data["$\\lambda$"].append(coefficient)
 
-    for task in tasks:
-        for attention in attentions:
-            for coefficient in get_coefficients(attention, coefficients):
-                data["Attention"].append(attention_names[attention])
-                data["$\\lambda$"].append(coefficient)
+        task = "copy"
+        metrics = run_experiment(task, epochs, seeds, coefficient, attention, stage=stage,
+                                    num_sentences_train=num_sentences_train)
 
-                metrics = run_experiment(task, epochs, seeds, coefficient, attention, stage=stage,
-                                         num_sentences_train=num_sentences_train)
+        task_name = task_names[task]
+        data[task_name + " acc"].append(mean(metrics["acc"]))
+        data[task_name + " att-mass"].append(mean(metrics["att_mass"]))
 
-                task_name = task_names[task]
-                data[task_name + " acc"].append(mean(metrics["acc"]))
-                data[task_name + " att-mass"].append(mean(metrics["att_mass"]))
+        if clear_out:
+            clear_output(wait=True)
+        ###
+        
+        task = "reverse-copy"
+        metrics = run_experiment(task, epochs, seeds, coefficient, attention, stage=stage,
+                                    num_sentences_train=num_sentences_train)
 
-                if clear_out:
-                    clear_output(wait=True)
+        task_name = task_names[task]
+        data[task_name + " acc"].append(mean(metrics["acc"]))
+        data[task_name + " att-mass"].append(mean(metrics["att_mass"]))
 
+        if clear_out:
+            clear_output(wait=True)
+        ###
+        
+        task = "binary-flip"
+        metrics = run_experiment(task, epochs, seeds, coefficient, attention, stage=stage,
+                                    num_sentences_train=num_sentences_train)
+
+        task_name = task_names[task]
+        data[task_name + " acc"].append(mean(metrics["acc"]))
+        data[task_name + " att-mass"].append(mean(metrics["att_mass"]))
+
+        if clear_out:
+            clear_output(wait=True)
+    
     print("Finished all experiments. Displaying ...")
 
     return pd.DataFrame(data)

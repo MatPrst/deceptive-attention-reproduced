@@ -20,10 +20,9 @@ def initialize_sentences(task, debug, num_train, splits):
             trg_sentences = trg_sentences[:int(1e5)]
             alignment_sentences = alignment_sentences[: int(1e5)]
 
-        if sp == 'train':
-            src_sentences = src_sentences[:num_train]
-            trg_sentences = trg_sentences[:num_train]
-            alignment_sentences = alignment_sentences[:num_train]
+        src_sentences = src_sentences[:num_train]
+        trg_sentences = trg_sentences[:num_train]
+        alignment_sentences = alignment_sentences[:num_train]
 
         sentences.append([src_sentences, trg_sentences, alignment_sentences])
 

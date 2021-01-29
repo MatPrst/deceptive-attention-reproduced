@@ -26,7 +26,7 @@ def set_seed(seed):
 
 
 class Encoder(torch.nn.Module):
-    """ encoder for seq2seq model """
+    """ Encoder for seq2seq model. """
 
     def __init__(self, input_dim, emb_dim, enc_hid_dim, dec_hid_dim, dropout):
         super(Encoder, self).__init__()
@@ -46,11 +46,10 @@ class Encoder(torch.nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, src, src_len):
-        """ returns out from RNN
-            along with the last value i.e. ht (for initializing the decoder)
+        """ Returns output from the RNN along with the last value i.e. h_t (for initializing the decoder).
         Parameters:
-            inp:  max_seq_len  x batch_size
-            inp_lens: list of lens of individuals sequences
+            src:  max_seq_len x batch_size
+            src_len: list of lengths of individuals sequences
         """
         embedded = self.dropout(self.embedding(src))
 
@@ -88,6 +87,8 @@ class Encoder(torch.nn.Module):
 
 
 class Attention(nn.Module):
+    """ Attention module for seq2seq model. """
+
     def __init__(self, enc_hid_dim, dec_hid_dim):
         super().__init__()
 
@@ -137,7 +138,7 @@ class Attention(nn.Module):
 
 
 class DecoderUniform(nn.Module):
-    """ a decoder in seq2seq tasks which has uniform attention """
+    """ Decoder in seq2seq tasks which has uniform attention. """
 
     def __init__(self, output_dim, emb_dim, enc_hid_dim, dec_hid_dim, dropout, attention):
         super().__init__()
@@ -158,7 +159,9 @@ class DecoderUniform(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, input, hidden, encoder_outputs, mask):
-        """ returns
+        """
+        Returns output from the decoder.
+
         Parameters:
             input: shape is batch size, comprising current input to the decoder
             hidden: batch size x dec hid dim
@@ -223,7 +226,7 @@ class DecoderUniform(nn.Module):
 
 
 class DecoderNoAttn(nn.Module):
-    """ a decoder in seq2seq tasks which has uniform attention """
+    """ Decoder in seq2seq tasks which has no attention. """
 
     def __init__(self, output_dim, emb_dim, enc_hid_dim, dec_hid_dim, dropout, attention):
         super().__init__()
@@ -244,7 +247,7 @@ class DecoderNoAttn(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, input, hidden, encoder_outputs, mask):
-        """ returns
+        """
         Parameters:
             input: shape is batch size, comprising current input to the decoder
             hidden: batch size x dec hid dim
@@ -316,7 +319,7 @@ class DecoderNoAttn(nn.Module):
 
 
 class Decoder(nn.Module):
-    """ a simple decoder in seq2seq tasks """
+    """ Simple decoder in seq2seq tasks with dot product attention."""
 
     def __init__(self, output_dim, emb_dim, enc_hid_dim, dec_hid_dim, dropout, attention):
         super().__init__()
@@ -337,7 +340,7 @@ class Decoder(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, input, hidden, encoder_outputs, mask):
-        """ returns
+        """
         Parameters:
             input: shape is batch size, comprising current input to the decoder
             hidden: batch size x dec hid dim

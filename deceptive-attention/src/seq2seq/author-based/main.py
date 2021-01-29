@@ -4,7 +4,6 @@ from train import train
 
 
 def main():
-    # --------------- parse the flags etc ----------------- #
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument('--task', dest='task', default='en-de',

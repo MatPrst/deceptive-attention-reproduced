@@ -265,17 +265,17 @@ def run_experiment(
     
     return best_test_accuracy, best_att_mass
 
-def run_sstwiki_experiment(model_type, num_epochs, anonymize, seed, hammer_loss, debug=False):
+def run_sstwiki_experiment(model_type, num_epochs, anonymize, seed, hammer_loss, debug=False, emb_size=128):
     assert model_type in ["emb-att", "emb-lstm-att"], "model type should be: emb-att or emb-lstm-att"
 
     metrics = None
     if type(seed) is int:
-        acc, att_mass = run_experiment("sst-wiki", model_type, num_epochs, None, True, anonymize, seed, hammer_loss, debug=debug)
+        acc, att_mass = run_experiment("sst-wiki", model_type, num_epochs, None, True, anonymize, seed, hammer_loss, debug=debug, emb_size=emb_size)
         metrics = {"acc": acc, "att_mass": att_mass}
     elif type(seed) is list:
         metrics = {"acc": [], "att_mass": []}
         for s in seed:
-            acc, att_mass = run_experiment("sst-wiki", model_type, num_epochs, None, True, anonymize, s, hammer_loss, debug=debug)
+            acc, att_mass = run_experiment("sst-wiki", model_type, num_epochs, None, True, anonymize, s, hammer_loss, debug=debug, emb_size=emb_size)
             metrics["acc"].append(acc)
             metrics["att_mass"].append(att_mass)
     
@@ -373,6 +373,52 @@ def run_embedding_experiments(num_epochs=None, seeds=[1, 2, 3, 4, 5], debug=Fals
 
 def run_bilstm_experiments(num_epochs=None, seeds=[1, 2, 3, 4, 5], debug=False):
     return run_all_experiments(num_epochs=num_epochs, seeds=seeds, models=["emb-lstm-att"], debug=debug)
+
+def run_embedding_dimension_experiments(num_epochs=None, seeds=[1, 2, 3, 4, 5], debug=False):
+    from IPython.display import clear_output
+    import pandas as pd
+    print("hello")
+    models=["emb-att", "emb-lstm-att"]
+    lambdas = [0.0, 0.1, 1.0]
+
+    data = {
+        "model": [],
+        "$\lambda$": [],
+        "sst-wiki acc 128": [],
+        "sst-wiki att-mass 128": [],
+        "sst-wiki acc 256": [],
+        "sst-wiki att-mass 256": [],
+        "sst-wiki acc 512": [],
+        "sst-wiki att-mass 512": [],
+    }
+
+    names = {
+        "emb-att": "Embedding",
+        "emb-lstm-att": "BiLSTM"
+    }
+
+    for model in models:
+        for hammer_loss in lambdas:
+            data["model"].append(names[model])
+            data["$\lambda$"].append(hammer_loss)
+
+            sst_metric = run_sstwiki_experiment(model, num_epochs if num_epochs else 15, False, seeds, hammer_loss, debug=debug, emb_size=128)
+            data["sst-wiki acc 128"].append(mean(sst_metric["acc"]))
+            data["sst-wiki att-mass 128"].append(mean(sst_metric["att_mass"]))
+            clear_output(wait=True)
+
+            sst_metric = run_sstwiki_experiment(model, num_epochs if num_epochs else 15, False, seeds, hammer_loss, debug=debug, emb_size=256)
+            data["sst-wiki acc 256"].append(mean(sst_metric["acc"]))
+            data["sst-wiki att-mass 256"].append(mean(sst_metric["att_mass"]))
+            clear_output(wait=True)
+
+            sst_metric = run_sstwiki_experiment(model, num_epochs if num_epochs else 15, False, seeds, hammer_loss, debug=debug, emb_size=512)
+            data["sst-wiki acc 512"].append(mean(sst_metric["acc"]))
+            data["sst-wiki att-mass 512"].append(mean(sst_metric["att_mass"]))
+            clear_output(wait=True)
+    
+    print("finished")
+    return pd.DataFrame(data)
 
 
 if __name__ == "__main__":

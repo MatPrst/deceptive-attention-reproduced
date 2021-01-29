@@ -22,7 +22,7 @@ Please note that for the *replication* code, [```a separate environment```](dece
 
 ## Datasets
 
-We do provide the data for all classification experiments in this repository. See the [classification data folder](deceptive-attention/src/classification/data) to check it out.
+We do provide the data for all classification experiments in this repository. See the [classification data folder](deceptive-attention/src/classification/data) to check it out - it will be used out of the box by our models
 
 For seq2seq tasks we have a compressed version of the data within this repo. In order to use it:
 

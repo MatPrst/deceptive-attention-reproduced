@@ -21,6 +21,7 @@ or create a new environment and install all required packages with:
 ```
 pip install -r requirements.txt
 ```
+Please note that for the *replication* code, [```a separate environment```](./FACT/blob/main/deceptive-attention/src/classification/BERT_replication/BERT_env.yml) should be installed as this part of the code employs more recent libraries.
 
 ## Visualizing Results
 

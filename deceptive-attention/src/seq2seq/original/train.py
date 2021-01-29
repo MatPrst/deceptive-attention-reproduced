@@ -52,7 +52,7 @@ LOG_PATH = "logs/"
 TERMINAL_LOGS = LOG_PATH + 'terminal_logs/'
 TENSORBOARD_LOG = LOG_PATH + 'tensorboard/'
 
-DATA_PATH = "data/"
+DATA_PATH = "../data/"
 DATA_VOCAB_PATH = DATA_PATH + "vocab/"
 DATA_TRANSLATIONS_PATH = DATA_PATH + "translations/"
 DATA_MODELS_PATH = DATA_PATH + "models/"
@@ -524,9 +524,9 @@ def main():
     os.makedirs(LOG_PATH, exist_ok=True)
     os.makedirs(TENSORBOARD_LOG, exist_ok=True)
     os.makedirs(TERMINAL_LOGS, exist_ok=True)
+
     os.makedirs(DATA_PATH, exist_ok=True)
     os.makedirs(DATA_VOCAB_PATH, exist_ok=True)
-
     os.makedirs(DATA_TRANSLATIONS_PATH, exist_ok=True)
 
     train()

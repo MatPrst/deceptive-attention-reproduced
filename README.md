@@ -54,7 +54,9 @@ python run_classifier.py \
 
 For the BERT replication, all 7 experiments for a specified task and seed can be produced by running:
 ```
-python bert_main_pl_experiments.py
+python bert_main_pl_experiments.py --task=occupation --seed=1 --progress_bar=1
+python bert_main_pl_experiments.py --task=pronoun --seed=2 --progress_bar=1
+python bert_main_pl_experiments.py --task=sstwiki --seed=3 --progress_bar=1
 ```
 
 ## Sequence To Sequence Reproduction

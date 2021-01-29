@@ -2,10 +2,10 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from pandas import read_csv
 import pytorch_lightning as pl
-from transformers import AutoTokenizer
+from transformers_editted.src.transformers.models.auto.tokenization_auto import AutoTokenizer
 
 import numpy as np
-import sys
+import os
 
 def compute_m(sentence_ids, impermissible_ids):
     """
@@ -78,7 +78,9 @@ class SSTWikiDataset(Dataset):
         Args:
 
         """
-        self.path = './data/sst-wiki/' + dataset + '.txt'
+        path = os.getcwd()
+        parent = os.path.abspath(os.path.join(path, os.pardir))
+        self.path = parent + './data/sst-wiki/' + dataset + '.txt'
         self.text = read_csv(self.path, sep="\t", header=None)
         self.block = read_csv(self.path+'.block', sep="\t", header=None)
 
@@ -157,7 +159,9 @@ class PronounDataset(Dataset):
         Args:
 
         """
-        self.path = './data/pronoun/' + dataset + '.txt'
+        path = os.getcwd()
+        parent = os.path.abspath(os.path.join(path, os.pardir))
+        self.path = parent + './data/pronoun/' + dataset + '.txt'
         self.text = read_csv(self.path, sep="\t", header=None)
 
         self.anonymization = anonymization
@@ -231,7 +235,9 @@ class OccupationDataset(Dataset):
         Args:
 
         """
-        self.path = './data/occupation-classification/' + dataset + '.txt'
+        path = os.getcwd()
+        parent = os.path.abspath(os.path.join(path, os.pardir))
+        self.path = parent + '/data/occupation-classification/' + dataset + '.txt'
         self.text = read_csv(self.path, sep="\t", header=None)
 
         self.anonymization = anonymization

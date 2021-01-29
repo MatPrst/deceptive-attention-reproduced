@@ -54,8 +54,6 @@ from ...modeling_utils import (
 from ...utils import logging
 from .configuration_bert import BertConfig
 
-# print('transformers editted')
-
 logger = logging.get_logger(__name__)
 
 _CONFIG_FOR_DOC = "BertConfig"

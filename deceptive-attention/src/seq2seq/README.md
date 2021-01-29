@@ -1,6 +1,6 @@
 # Sed2Seq Tasks
 
-This is about how to reproduce Table 4 and 4 in our reproduction report using the unidirectional and bidirectional GRU.
+This is about how to reproduce Table 4 and 5 in our reproduction report using the unidirectional and bidirectional GRU.
 
 Assuming [our environment `attention`](../../../env.yml) has been properly installed and activated. If not - check out our [root README file](../../../README.md).
 

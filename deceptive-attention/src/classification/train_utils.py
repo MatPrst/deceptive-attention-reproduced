@@ -39,7 +39,7 @@ def get_trained_model(model_path, vocabulary, model_type=None, emb_size=128, hid
         model_type = model_path[model_path.find('model=') + 6:model_path.find('_task=')].strip()
 
     model = get_model(model_type, vocabulary, emb_size, hid_size)
-    map_location = torch.cuda if torch.cuda.is_available() else torch.device('cpu')
+    map_location = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     model_object = torch.load(model_path, map_location=map_location)
     model.load_state_dict(model_object)
     return model

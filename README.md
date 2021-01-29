@@ -26,7 +26,7 @@ Classification tasks can be run using the [main.py](deceptive-attention/src/clas
 ```
 python main.py --num-epochs 15 --loss-hammer 0.0 --model emb-att --task sst-wiki --use-block-file
 python main.py --num-epochs 15 --loss-hammer 0.0 --model emb-att --task pronoun --block-words "he she her his him himself herself
-python main.py --num-epochs 5 --loss-hammer 0.0 --model $model_name --block-words "he she her his him himself herself hers mr mrs ms mr. mrs. ms." --task occupation-classification --clip-vocab
+python main.py --num-epochs 5 --loss-hammer 0.0 --model emb-att --block-words "he she her his him himself herself hers mr mrs ms mr. mrs. ms." --task occupation-classification --clip-vocab
 ```
 
 For reproducing the BERT experiments, we first need to install the following package containing the implementation of BERT used by the original authors. We implemented the missing anonymisation/removing of the impermissible tokens which was missing in the original repository:

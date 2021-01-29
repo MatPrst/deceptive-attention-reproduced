@@ -70,25 +70,16 @@ class Language:
         return padded_seq[:max_len]
 
 
-def bleu_score_corpus(references, candidates, trg_lang, logger):
-    """
-    Computes the (test) corpus wide BLEU score using the library NLTK. Takes a list of reference sentences
-    (target sentences in target language) as well as candidates, transforms then into the expected format for NLTK
-    and computes the score.
-    """
-
-    # targets are indices --> converting indices to word tokens
-
+def get_target_sentences_as_list(data_batch, trg_lang):
     target_sentences = []
-    for ref in references:
+    for data in data_batch:
         # getting the target indices and cutting off <eof> and <sos> from target sentences
-        trg_tokens = [trg_lang.get_word(w) for w in ref[2][0][1:-1]]
+        trg_tokens = [trg_lang.get_word(w) for w in data[2][0][1:-1]]
         target_sentences.append([trg_tokens])
+    return target_sentences
 
-    return bleu_score(target_sentences, candidates, logger)
 
-
-def bleu_score(target_sentences, candidates, logger):
+def bleu_score_nltk(target_sentences, candidates):
     """
     Computes the (test) corpus wide BLEU score using the library NLTK. Takes a list of reference sentences
     (target sentences in target language) as well as candidates, transforms then into the expected format for NLTK
@@ -97,14 +88,10 @@ def bleu_score(target_sentences, candidates, logger):
 
     assert len(candidates) == len(target_sentences)
 
+    # candidates are already words
+    # targets are indices --> converting indices to word tokens
+
     candidate_sentences = [candidate.split() for candidate in candidates]
-
-    logger.info('\n')
-
-    for i in range(len(candidate_sentences[:3])):
-        logger.info(f'candidate {candidate_sentences[i]}')
-        logger.info(f'reference {target_sentences[i]}')
-        logger.info('\n')
 
     # Expected structure by NLTK
     # target Sentences: [[...], [...]]

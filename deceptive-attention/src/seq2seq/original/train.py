@@ -10,7 +10,6 @@ import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-import models
 import utils
 from batch_utils import *
 from log_utils import *
@@ -28,7 +27,7 @@ from utils import *
 # --------------- parse the flags etc ----------------- #
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-parser.add_argument('--task', dest='task', default='en-de',
+parser.add_argument('--task', dest='task', default='copy',
                     choices=('copy', 'reverse-copy', 'binary-flip', 'en-hi', 'en-de'),
                     help='select the task you want to run on')
 
@@ -52,9 +51,11 @@ EPOCHS = params['epochs']
 LOG_PATH = "logs/"
 TERMINAL_LOGS = LOG_PATH + 'terminal_logs/'
 TENSORBOARD_LOG = LOG_PATH + 'tensorboard/'
-DATA_PATH = "../data/"
-DATA_VOCAB_PATH = "vocab/"
-DATA_MODELS_PATH = "models/"
+
+DATA_PATH = "data/"
+DATA_VOCAB_PATH = DATA_PATH + "vocab/"
+DATA_TRANSLATIONS_PATH = DATA_PATH + "translations/"
+DATA_MODELS_PATH = DATA_PATH + "models/"
 
 long_type = torch.LongTensor
 float_type = torch.FloatTensor
@@ -280,7 +281,6 @@ def set_seed(seed):
         torch.cuda.manual_seed_all(seed)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
-    models.set_seed(seed)
 
 
 def init_weights(m):
@@ -329,6 +329,41 @@ def initialize_model(attention, encoder_emb_dim, decoder_emb_dim, encoder_hid_di
     return optimizer, criterion, model, suffix
 
 
+# def evaluate_test(task, coefficient, seed, model='best'):
+#     """
+#
+#     """
+#
+#     if model == 'best':
+#         # load the best model for the given settings
+#         pass
+#     elif model == 'latest':
+#         # load the latest model for the given settings
+#         pass
+#
+#     load_vocabulary(coefficient, task)
+#
+#     sentences = initialize_sentences(task, debug=False, num_train=100000, splits=SPLITS)
+#
+#     _, _, test_batches = get_batches_from_sentences(sentences, BATCH_SIZE, SRC_LANG, TRG_LANG)
+#
+#     criterion = nn.CrossEntropyLoss(ignore_index=PAD_IDX)
+#
+#     return evaluate(model, test_batches, criterion)
+
+
+def load_vocabulary(coefficient, task):
+    # load vocabulary if already present
+    vocab_prefix = DATA_PATH + task + '_coeff=' + str(coefficient)
+
+    src_vocab_path, trg_vocab_path = vocab_prefix + ".src.vocab", vocab_prefix + ".trg.vocab"
+
+    if os.path.exists(src_vocab_path):
+        SRC_LANG.load_vocab(src_vocab_path)
+    if os.path.exists(trg_vocab_path):
+        TRG_LANG.load_vocab(trg_vocab_path)
+
+
 def train(task=TASK,
           epochs=EPOCHS,
           coeff=COEFF,
@@ -356,14 +391,7 @@ def train(task=TASK,
                 f'task: {task}\n')
 
     # load vocabulary if already present
-    src_vocab_path = DATA_PATH + task + '_coeff=' + str(coeff) + ".src.vocab"
-    trg_vocab_path = DATA_PATH + task + '_coeff=' + str(coeff) + ".trg.vocab"
-
-    if os.path.exists(src_vocab_path):
-        SRC_LANG.load_vocab(src_vocab_path)
-
-    if os.path.exists(trg_vocab_path):
-        TRG_LANG.load_vocab(trg_vocab_path)
+    load_vocabulary(coeff, task)
 
     sentences = initialize_sentences(task, debug, num_train, SPLITS, DATA_PATH)
 
@@ -378,6 +406,8 @@ def train(task=TASK,
     epochs_taken_to_converge = 0
 
     no_improvement_last_time = False
+
+    model_path = f'{DATA_MODELS_PATH}model_{task}{suffix}_seed={str(seed)}_coeff={str(coeff)}_epoch=%s.pt'
 
     for epoch in range(epochs):
 
@@ -401,10 +431,8 @@ def train(task=TASK,
 
         if val_loss < best_valid_loss:
             best_valid_loss = val_loss
-            torch.save(model.state_dict(),
-                       DATA_MODELS_PATH + 'model_' + task + suffix + '_seed=' + str(seed) + '_coeff='
-                       + str(coeff) + '_num-train=' + str(num_train) + '.pt')
             epochs_taken_to_converge = epoch + 1
+            torch.save(model.state_dict(), model_path % epochs_taken_to_converge)
             convergence_time += (end_time - start_time)
             no_improvement_last_time = False
         else:
@@ -420,8 +448,7 @@ def train(task=TASK,
             |  Val. Attn Mass: {val_attn_mass:0.2f} |  Val. PPL: {math.exp(val_loss):7.3f}')
 
     # load the best model and print stats:
-    model.load_state_dict(torch.load(DATA_MODELS_PATH + 'model_' + task + suffix + '_seed=' + str(seed) + '_coeff='
-                                     + str(coeff) + '_num-train=' + str(num_train) + '.pt'))
+    model.load_state_dict(torch.load(model_path % epochs_taken_to_converge))
 
     test_loss, test_acc, test_attn_mass = evaluate(model, test_batches, criterion)
     logger.info(f'\t Test Loss: {test_loss:.3f} |  Test Acc: {test_acc:0.2f} \
@@ -432,21 +459,34 @@ def train(task=TASK,
     logger.info(f"Convergence time in seconds ..\t{convergence_time:0.2f}")
     logger.info(f"Sample efficiency in epochs ..\t{epochs_taken_to_converge}")
 
-    out_path = f"{DATA_VOCAB_PATH}{task}{suffix}_seed={str(seed)}_coeff={str(coeff)}_num-train={str(num_train)}"
-    SRC_LANG.save_vocab(f"{out_path}.src.vocab")
-    TRG_LANG.save_vocab(f"{out_path}.trg.vocab")
+    data_out_path = f"{task}{suffix}_seed={str(seed)}_coeff={str(coeff)}_epoch={str(epochs_taken_to_converge)}"
+    vocab_out_path = f"{DATA_VOCAB_PATH}{data_out_path}"
+    SRC_LANG.save_vocab(f"{vocab_out_path}.src.vocab")
+    TRG_LANG.save_vocab(f"{vocab_out_path}.trg.vocab")
 
     if task in ['en-hi', 'en-de']:
         # generate the output to compute bleu scores as well...
         logger.info("Generating the output translations from the model.")
 
-        translations, bleu_score = generate_translations(model, sentences, logger)
+        translations_out_path = f"{DATA_TRANSLATIONS_PATH}{data_out_path}"
+        translations, src_sentences, bleu_score = generate_translations(model, sentences)
 
         logger.info(f"BLEU score ..........\t{bleu_score:0.2f}")
-        logger.info("[done] .... now dumping the translations.")
 
-        fw = open(f"{out_path}.test.out", 'w')
+        # store files for computing BLEU score for compare-mt afterwards manually via the terminal
+        logger.info("[done] .... now dumping the translations.")
+        fw = open(f"{translations_out_path}.test.out", 'w', encoding='utf-8')
         for line in translations:
+            fw.write(line.strip() + "\n")
+        fw.close()
+
+        logger.info(" .... now dumping the respective src sentences.")
+
+        # flatten list
+        src_sentences = [j for i in src_sentences for j in i]
+
+        fw = open(f"{translations_out_path}.src.out", 'w', encoding='utf-8')
+        for line in src_sentences:
             fw.write(line.strip() + "\n")
         fw.close()
 
@@ -461,17 +501,21 @@ def epoch_time(start_time, end_time):
     return elapsed_minutes, elapsed_seconds
 
 
-def generate_translations(model, sentences, logger):
+def generate_translations(model, sentences):
     test_sentences = sentences[2]
-    test_batches_single = list(get_batches(test_sentences, 1, SRC_LANG, TRG_LANG))
+    single_test_batch = list(get_batches(test_sentences, 1, SRC_LANG, TRG_LANG))
 
-    logger.info(f'batch single {str(test_batches_single)}')
-    logger.info(f'batch single length {str(len(test_batches_single))}')
+    output_lines = generate(model, single_test_batch)
+    target_sentences = get_target_sentences_as_list(single_test_batch, TRG_LANG)
+    bleu_nltk = bleu_score_nltk(target_sentences, output_lines)
 
-    output_lines = generate(model, test_batches_single)
-    score = bleu_score_corpus(test_batches_single, output_lines, TRG_LANG)
+    # [[...], [...]] --> [..., ...]
+    targets = []
+    for word_list in target_sentences:
+        sentence = [' '.join(word) for word in word_list]
+        targets.append(sentence)
 
-    return output_lines, score * 100  # report it in percentage
+    return output_lines, targets, bleu_nltk * 100  # report it in percentage
 
 
 def main():
@@ -482,6 +526,8 @@ def main():
     os.makedirs(TERMINAL_LOGS, exist_ok=True)
     os.makedirs(DATA_PATH, exist_ok=True)
     os.makedirs(DATA_VOCAB_PATH, exist_ok=True)
+
+    os.makedirs(DATA_TRANSLATIONS_PATH, exist_ok=True)
 
     train()
 

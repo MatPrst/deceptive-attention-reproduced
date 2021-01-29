@@ -9,15 +9,3 @@ There are two main sections with allow for:
 
 - Training + Evaluation: Training the model for task `Bigram Flip`, `Sequence Copy`, `Sequence Reverse` or `English to German translation`.
 - Evaluation: Load our pretrained models and run the experiments with these for flexible configurations regarding seeds, coefficients and tasks.
-
-## Training + Evaluation
-
-## Evaluation
-
-In order to run evaluation with our pretrained models:
-
-1. Download the models from here TODO.
-2. Add them to the [`models-pretrained` folder](data/models-pretrained/).
-3. Run respective cells in the notebook.
-
-The notebook will output tables with the respective means over all configured seeds for accuracy, attention mass and possibly BLEU score.

@@ -325,7 +325,6 @@ def run_all_experiments(num_epochs=None, seeds=[1, 2, 3, 4, 5], models=["emb-att
     import pandas as pd
 
     lambdas = [0.0, 0.0, 0.1, 1.0]
-    # models = ["emb-att", "emb-lstm-att"]
     anonymization = [True, False, False, False]
 
     data = {
@@ -353,17 +352,17 @@ def run_all_experiments(num_epochs=None, seeds=[1, 2, 3, 4, 5], models=["emb-att
 
             sst_metric = run_sstwiki_experiment(model, num_epochs if num_epochs else 15, anonymize, seeds, hammer_loss, debug=debug)
             data["sst-wiki acc"].append(mean(sst_metric["acc"]))
-            data["sst-wiki att-mass"].append(mean(sst_metric["att_mass"]))
+            data["sst-wiki att-mass"].append(mean(sst_metric["att_mass"]) if not anonymize else "-")
             clear_output(wait=True)
 
             occupation_metric = run_occupation_experiment(model, num_epochs if num_epochs else 5, anonymize, seeds, hammer_loss, debug=debug)
             data["occupation acc"].append(mean(occupation_metric["acc"]))
-            data["occupation att-mass"].append(mean(occupation_metric["att_mass"]))
+            data["occupation att-mass"].append(mean(occupation_metric["att_mass"]) if not anonymize else "-")
             clear_output(wait=True)
 
             pronoun_metric = run_pronoun_experiment(model, num_epochs if num_epochs else 15, anonymize, seeds, hammer_loss, debug=debug)
             data["gender acc"].append(mean(pronoun_metric["acc"]))
-            data["gender att-mass"].append(mean(pronoun_metric["att_mass"]))
+            data["gender att-mass"].append(mean(pronoun_metric["att_mass"]) if not anonymize else "-")
             clear_output(wait=True)
     
     print("finished")

@@ -24,7 +24,14 @@ from train import *
 #                'en-de-no-attn-0.0-2': 7,
 #                'en-de-no-attn-0.0-3': 7,
 #                'en-de-no-attn-0.0-4': 8,
-#                'en-de-no-attn-0.0-5': 7
+#                'en-de-no-attn-0.0-5': 7,
+#                'binary-flip-dot-product-0.0-1': 13,
+#                'binary-flip-dot-product-0.1-1': 5,
+#                'binary-flip-dot-product-1.0-1': 5,
+#                'binary-flip-dot-product-0.0-2': 17,
+#                'binary-flip-dot-product-0.1-2': 15,
+#                'binary-flip-dot-product-1.0-2': 10,
+#                'binary-flip-dot-product-0.0-3': 3,
 #                }
 
 BEST_EPOCHS = {'en-de-dot-product-0.0-1': 7,
@@ -115,11 +122,11 @@ def run_experiment(task, epochs, seed, coefficient, attention, stage='train', nu
             acc = acc.item()
 
         if acc is not None:
-            metrics["acc"].append(round(acc, 2))
+            metrics["acc"].append(acc)
         if att_mass is not None:
-            metrics["att_mass"].append(round(att_mass, 2))
+            metrics["att_mass"].append(att_mass)
         if bleu_score is not None:
-            metrics["bleu_score"].append(round(bleu_score, 2))
+            metrics["bleu_score"].append(bleu_score)
 
     return metrics
 
@@ -148,8 +155,11 @@ def run_en_de_experiments(clear_out=False, stage='train', seeds=None, coefficien
         "Attention": [],
         "$\\lambda$": [],
         "BLEU (NLTK)": [],
+        "BLEU (NLTK) STD": [],
         "Accuracy": [],
-        "Attention Mass": []
+        "Acc. STD": [],
+        "Attention Mass": [],
+        "A.M. STD": [],
     }
 
     attention_names = {
@@ -163,11 +173,15 @@ def run_en_de_experiments(clear_out=False, stage='train', seeds=None, coefficien
             data["Attention"].append(attention_names[attention])
             data["$\\lambda$"].append(coefficient)
 
-            metrics = run_experiment(task, epochs, seeds, coefficient, attention, stage=stage)
+            metrics = run_experiment(task, epochs, seeds, coefficient, attention, stage=stage,
+                                     num_sentences_train=num_sentences_train)
 
             data['Accuracy'].append(mean(metrics["acc"]))
+            data['Acc. STD'].append(std(metrics["acc"]))
             data['Attention Mass'].append(mean(metrics["att_mass"]))
+            data['A.M. STD'].append(std(metrics["att_mass"]))
             data['BLEU (NLTK)'].append(mean(metrics["bleu_score"]))
+            data['BLEU (NLTK) STD'].append(std(metrics["bleu_score"]))
 
             if clear_out:
                 clear_output(wait=True)
@@ -246,4 +260,13 @@ def get_coefficients(attention, coefficients):
 def mean(data):
     if data is None or len(data) == 0:
         return -1
-    return sum(data) / len(data)
+    return round(sum(data) / len(data), 2)
+
+
+def std(data):
+    n = len(data)
+    if n == 0:
+        return -1
+    mn = mean(data)
+    deviations = [(x - mn) ** 2 for x in data]
+    return round(sum(deviations) / n, 2)

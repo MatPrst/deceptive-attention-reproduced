@@ -57,7 +57,6 @@ The original implementation and paper that we base on have been proposed by:
 > Danish Pruthi, Mansi Gupta, Bhuwan Dhingra, Graham Neubig, Zachary C. Lipton \
 > 2020 (https://arxiv.org/abs/1909.07913)
 
-Full credits for proposed methods used from this paper belong to these authors. Huge parts of the code we provide in this repository are based on their Github repository: \
-https://github.com/danishpruthi/deceptive-attention.
+Full credits for proposed methods used from this paper belong to these authors. Huge parts of the code we provide in this repository are based on their Github repository: https://github.com/danishpruthi/deceptive-attention.
 
 Furthermore, a part of the code-base relies on the transformers library - however, we had to make several changes to some of the functionalities in this library, and therefore a local copy of this library - ` transformers_editted ` - is included in this repository. 

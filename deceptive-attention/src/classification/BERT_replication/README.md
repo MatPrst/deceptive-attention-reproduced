@@ -10,6 +10,12 @@ In order to run the code either create an Anaconda environment:
 conda env create -f BERT_env.yml
 ```
 
+Once the environment is created and activated, you can install our modified version of the transformer library using:
+
+```
+pip install transformers_editted/
+```
+
 ## Visualizing Results
 
 We provide an IPython notebook detailing all results from our reproducibility report. 

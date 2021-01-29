@@ -27,9 +27,11 @@ Please note that for the *replication* code, [```a separate environment```](./FA
 
 We provide several IPython notebooks detailing all results from the respective parts of our reproducibility report:
 
--
--
-- [```BERT replication notebook```](https://github.com/MatPrst/FACT/blob/main/deceptive-attention/src/classification/BERT_replication/BERT%20replication%20notebook%20completed.ipynb)
+- [```Classification reproduction notebook```](TO-ADD!)
+- [```Seq2Seq reproduction notebook```](deceptive-attention/src/seq2seq/author-based/seq2seq.ipynb)
+- [```BERT replication notebook```](deceptive-attention/src/classification/BERT_replication/BERT%20replication%20notebook%20completed.ipynb)
+
+Besides the reproductions and replications, we also extended the code with LIME, a classifier explanation technique, in order to determine if other explanation techniques can be deceived alongside humans. Examples of LIME explaining samples from our Embeddings + Attention and BiLSTM + Attention models can be found in the [Lime Experiments IPython Notebook](deceptive-attention/src/classification/experiments-lime.ipynb).
 
 ## Authors
 

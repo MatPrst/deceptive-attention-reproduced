@@ -20,14 +20,54 @@ conda env create -f env.yml
 
 Please note that for the *replication* code, [```a separate environment```](deceptive-attention/src/classification/BERT_replication/BERT_env.yml) should be installed as this part of the code employs more recent libraries.
 
+## Datasets
+
+We do provide the data for all classification experiments in this repository. See the [classification data folder](deceptive-attention/src/classification/data) to check it out - it will be used out of the box by our models
+
+For seq2seq tasks we have a compressed version of the data within this repo. In order to use it:
+
+1. Browse to the [seq2seq data folder](deceptive-attention/src/seq2seq/).
+2. Unzip the [data file](deceptive-attention/src/seq2seq/data.zip).
+
+Now when running experiments this data can be used by our models.
+
 ## Classification Reproduction
 
+Classification tasks can be run using the [main.py](deceptive-attention/src/classification/main.py) script. Here are some examples on how to run the 3 tasks:
+```
+python main.py --num-epochs 15 --loss-hammer 0.0 --model emb-att --task sst-wiki --use-block-file
+python main.py --num-epochs 15 --loss-hammer 0.0 --model emb-att --task pronoun --block-words "he she her his him himself herself"
+python main.py --num-epochs 5 --loss-hammer 0.0 --model emb-att --block-words "he she her his him himself herself hers mr mrs ms mr. mrs. ms." --task occupation-classification --clip-vocab
+```
+
+For reproducing the BERT experiments, we first need to install the following package containing the implementation of BERT used by the original authors. We implemented the missing anonymisation/removing of the impermissible tokens which was missing in the original repository:
+```
+pip install deceptive-attention/src/classification/pytorch-pretrained-BERT/
+```
+
+We can then run an experiment using the [run_classifier.py](deceptive-attention/src/classification/pytorch-pretrained-BERT/examples/run_classifier.py) script:
+```
+python run_classifier.py \
+    --name pronoun-bert
+    --data_dir  data/pronoun-bert
+    --bert_model bert-base-uncased
+    --do_train
+    --do_eval
+    --do_lower_case
+    --num_train_epochs 4
+    --output_dir output/
+    --hammer_coeff 0.0
+    --input_processor_type pronoun
+    --att_opt_func mean
+```
 
 ## Classification BERT Replication
 
 For the BERT replication, all 7 experiments for a specified task and seed can be produced by running:
 ```
-python bert_main_pl_experiments.py
+python bert_main_pl_experiments.py --task=occupation --seed=1 --progress_bar=1
+python bert_main_pl_experiments.py --task=pronoun --seed=2 --progress_bar=1
+python bert_main_pl_experiments.py --task=sstwiki --seed=3 --progress_bar=1
 ```
 
 ## Sequence To Sequence Reproduction

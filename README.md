@@ -6,7 +6,7 @@ Starting off with reproducing the original paper `Learning to Deceive with Atten
 
 # Organisation of the Repository
 
-Following the author's repository, we divided the code-base into [```classification```](https://github.com/MatPrst/FACT/tree/main/deceptive-attention/src/classification) and [```seq2seq```](https://github.com/MatPrst/FACT/tree/main/deceptive-attention/src/seq2seq) subfolders. In ```classification```, you can find both code used for *reproducing* the results, and code for *replicating* the results (specifically, see the [```BERT_replication```](https://github.com/MatPrst/FACT/tree/main/deceptive-attention/src/classification/BERT_replication) subfolder).
+Following the author's repository, we divided the codebase into [```classification```](https://github.com/MatPrst/FACT/tree/main/deceptive-attention/src/classification) and [```seq2seq```](https://github.com/MatPrst/FACT/tree/main/deceptive-attention/src/seq2seq) subfolders. In ```classification```, you can find both code used for *reproducing* the results, and code for *replicating* the results (specifically, see the [```BERT_replication```](https://github.com/MatPrst/FACT/tree/main/deceptive-attention/src/classification/BERT_replication) subfolder).
 
 ## Environment Configuration
 

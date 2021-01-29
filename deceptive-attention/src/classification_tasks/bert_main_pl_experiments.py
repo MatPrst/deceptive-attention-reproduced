@@ -211,7 +211,6 @@ class BERTModel(LightningModule):
 
         return R, torch.mean(attention_mass).item()
 
-
 def get_lowest(path_dict, baseline):
     """ This beautiful function takes a dict of model paths and
     returns the path with the lowest dev attention mass """
@@ -222,12 +221,12 @@ def get_lowest(path_dict, baseline):
         # Behold the most robustest of parsing technologies known to mankind
         left_idx = path.find('val_attention_mass=') + len('val_attention_mass=')
         right_idx = path.find('.ckpt')
-        am_value = path[left_idx:right_idx]
+        am_value = path[left_idx:right_idx] # this line extracts the attention mass value from the filepath
         am_values.append(float(am_value))
 
         left_idx = path.find('val_acc=') + len('val_acc=')
         right_idx = path.find('-val_attention_mass=')
-        acc_value = path[left_idx:right_idx]
+        acc_value = path[left_idx:right_idx] # this line extracts the validation accuracy value from the filepath
         acc_values.append(float(acc_value))
 
     eligible = [] # keep track of checkpoints whose test accuracies are /geq 0.02

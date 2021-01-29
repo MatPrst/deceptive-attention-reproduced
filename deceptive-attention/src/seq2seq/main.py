@@ -7,7 +7,7 @@ def main():
     # --------------- parse the flags etc ----------------- #
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument('--task', dest='task', default='copy',
+    parser.add_argument('--task', dest='task', default='en-de',
                         choices=('copy', 'reverse-copy', 'binary-flip', 'en-hi', 'en-de'),
                         help='select the task you want to run on')
 
@@ -37,5 +37,6 @@ def main():
           params['debug'],
           params['num_train'])
 
-    if __name__ == "__main__":
-        main()
+
+if __name__ == "__main__":
+    main()

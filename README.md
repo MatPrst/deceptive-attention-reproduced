@@ -18,11 +18,6 @@ In order to run the code either create an Anaconda environment:
 conda env create -f env.yml
 ```
 
-or create a new environment and install all required packages with:
-
-```
-pip install -r requirements.txt
-```
 Please note that for the *replication* code, [```a separate environment```](deceptive-attention/src/classification/BERT_replication/BERT_env.yml) should be installed as this part of the code employs more recent libraries.
 
 ## Classification Reproduction

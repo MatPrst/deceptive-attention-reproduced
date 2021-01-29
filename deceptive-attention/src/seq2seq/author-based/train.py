@@ -26,30 +26,6 @@ from utils import *
 # CUDA 10.2
 # CUBLAS_WORKSPACE_CONFIG =:16:8
 
-# --------------- parse the flags etc ----------------- #
-parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-
-parser.add_argument('--task', dest='task', default='copy',
-                    choices=('copy', 'reverse-copy', 'binary-flip', 'en-hi', 'en-de'),
-                    help='select the task you want to run on')
-
-parser.add_argument('--debug', dest='debug', action='store_true')
-parser.add_argument('--loss-coef', dest='loss_coeff', type=float, default=0.0)
-parser.add_argument('--epochs', dest='epochs', type=int, default=5)
-parser.add_argument('--seed', dest='seed', type=int, default=1234)
-
-parser.add_argument('--attention', dest='attention', type=str, default='dot-product')
-
-parser.add_argument('--batch-size', dest='batch_size', type=int, default=128)
-parser.add_argument('--num-train', dest='num_train', type=int, default=1000000)
-parser.add_argument('--decode-with-no-attn', dest='no_attn_inference', action='store_true')
-
-params = vars(parser.parse_args())
-TASK = params['task']
-DEBUG = params['debug']
-COEFF = params['loss_coeff']
-EPOCHS = params['epochs']
-
 LOG_PATH = "logs/"
 TERMINAL_LOGS = LOG_PATH + 'terminal_logs/'
 TENSORBOARD_LOG = LOG_PATH + 'tensorboard/'

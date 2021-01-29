@@ -93,12 +93,6 @@ def bleu_score_nltk(target_sentences, candidates, print_out=False):
 
     candidate_sentences = [candidate.split() for candidate in candidates]
 
-    if print_out:
-        for i in range(len(candidate_sentences[:10])):
-            print('candidate ', candidate_sentences[i])
-            print('reference ', target_sentences[i])
-            print('\n')
-
     # Expected structure by NLTK
     # target Sentences: [[...], [...]]
     # candidate Sentences: [..., ...]

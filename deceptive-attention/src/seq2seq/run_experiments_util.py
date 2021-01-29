@@ -93,7 +93,7 @@ def evaluate_test(task, coefficient, seed, attention, batch_size=128):
     return accuracy, attention_mass, bleu_score
 
 
-def run_experiment(task, epochs, seed, coefficient, attention, stage='train'):
+def run_experiment(task, epochs, seed, coefficient, attention, stage='train', num_sentences_train=1000000):
     if type(seed) is int:
         seed = [seed]
 
@@ -104,7 +104,7 @@ def run_experiment(task, epochs, seed, coefficient, attention, stage='train'):
         acc, att_mass, bleu_score = None, None, None
 
         if stage == 'train':
-            acc, att_mass, bleu_score = train(task, coefficient, s, attention, epochs, num_train=10)
+            acc, att_mass, bleu_score = train(task, coefficient, s, attention, epochs, num_train=num_sentences_train)
         elif stage == 'test':
             acc, att_mass, bleu_score = evaluate_test(task, coefficient, s, attention)
 
@@ -124,7 +124,8 @@ def run_experiment(task, epochs, seed, coefficient, attention, stage='train'):
     return metrics
 
 
-def run_en_de_experiments(clear_out=False, stage='train', seeds=None, coefficients=None, attentions=None, epochs=None):
+def run_en_de_experiments(clear_out=False, stage='train', seeds=None, coefficients=None, attentions=None, epochs=None,
+                          num_sentences_train=1000000):
     if clear_out:
         clear_output(wait=True)
 
@@ -177,7 +178,7 @@ def run_en_de_experiments(clear_out=False, stage='train', seeds=None, coefficien
 
 
 def run_synthetic_experiments(clear_out=False, stage='train', seeds=None, tasks=None, coefficients=None,
-                              attentions=None, epochs=None):
+                              attentions=None, epochs=None, num_sentences_train=1000000):
     if clear_out:
         clear_output(wait=True)
 
@@ -223,7 +224,8 @@ def run_synthetic_experiments(clear_out=False, stage='train', seeds=None, tasks=
                 data["Attention"].append(attention_names[attention])
                 data["$\\lambda$"].append(coefficient)
 
-                metrics = run_experiment(task, epochs, seeds, coefficient, attention, stage=stage)
+                metrics = run_experiment(task, epochs, seeds, coefficient, attention, stage=stage,
+                                         num_sentences_train=num_sentences_train)
 
                 task_name = task_names[task]
                 data[task_name + " acc"].append(mean(metrics["acc"]))

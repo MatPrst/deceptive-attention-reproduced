@@ -27,7 +27,7 @@ We do provide the data for all classification experiments in this repository. Se
 For seq2seq tasks we have a compressed version of the data within this repo. In order to use it:
 
 1. Browse to the [seq2seq data folder](deceptive-attention/src/seq2seq/).
-2. Unzip the [data file](deceptive-attention/src/seq2seq/data.zip)
+2. Unzip the [data file](deceptive-attention/src/seq2seq/data.zip).
 
 Now when running experiments this data can be used by our models.
 

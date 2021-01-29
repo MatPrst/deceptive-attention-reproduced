@@ -1,14 +1,11 @@
 import math
 import os
 import random
-import subprocess
 import time
 
-import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from IPython.display import clear_output
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 

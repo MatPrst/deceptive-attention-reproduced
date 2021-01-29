@@ -27,7 +27,7 @@ Please note that for the *replication* code, [```a separate environment```](./FA
 
 We provide several IPython notebooks detailing all results from the respective parts of our reproducibility report:
 
-- [```Classification reproduction notebook```](TO-ADD!)
+- [```Classification reproduction notebook```](deceptive-attention/src/classification/classification.ipynb)
 - [```Seq2Seq reproduction notebook```](deceptive-attention/src/seq2seq/author-based/seq2seq.ipynb)
 - [```BERT replication notebook```](deceptive-attention/src/classification/BERT_replication/BERT%20replication%20notebook%20completed.ipynb)
 

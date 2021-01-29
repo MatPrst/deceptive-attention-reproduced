@@ -1,51 +1,52 @@
 from train import *
-
-# BEST_EPOCHS = {'en-de-dot-product-0.0-1': 7,
-#                'en-de-dot-product-0.1-1': 8,
-#                'en-de-dot-product-1.0-1': 7,
-#                'en-de-dot-product-0.0-2': 6,
-#                'en-de-dot-product-0.1-2': 9,
-#                'en-de-dot-product-1.0-2': 7,
-#                'en-de-dot-product-0.0-3': 6,
-#                'en-de-dot-product-0.1-3': 6,
-#                'en-de-dot-product-1.0-3': 8,
-#                'en-de-dot-product-0.0-4': 7,
-#                'en-de-dot-product-0.1-4': 6,
-#                'en-de-dot-product-1.0-4': 8,
-#                'en-de-dot-product-0.0-5': 7,
-#                'en-de-dot-product-0.1-5': 7,
-#                'en-de-dot-product-1.0-5': 7,
-#                'en-de-uniform-0.0-1': 10,
-#                'en-de-uniform-0.0-2': 7,
-#                'en-de-uniform-0.0-3': 7,
-#                'en-de-uniform-0.0-4': 8,
-#                'en-de-uniform-0.0-5': 7,
-#                'en-de-no-attn-0.0-1': 10,
-#                'en-de-no-attn-0.0-2': 7,
-#                'en-de-no-attn-0.0-3': 7,
-#                'en-de-no-attn-0.0-4': 8,
-#                'en-de-no-attn-0.0-5': 7,
-#                'binary-flip-dot-product-0.0-1': 13,
-#                'binary-flip-dot-product-0.1-1': 5,
-#                'binary-flip-dot-product-1.0-1': 5,
-#                'binary-flip-dot-product-0.0-2': 17,
-#                'binary-flip-dot-product-0.1-2': 15,
-#                'binary-flip-dot-product-1.0-2': 10,
-#                'binary-flip-dot-product-0.0-3': 3,
-#                'binary-flip-dot-product-0.1-3': 4,
-#                'binary-flip-dot-product-1.0-3': 4,
-#                }
+from train import DATA_PATH
 
 BEST_EPOCHS = {'en-de-dot-product-0.0-1': 7,
+               'en-de-dot-product-0.1-1': 8,
+               'en-de-dot-product-1.0-1': 7,
                'en-de-dot-product-0.0-2': 6,
+               'en-de-dot-product-0.1-2': 9,
+               'en-de-dot-product-1.0-2': 7,
                'en-de-dot-product-0.0-3': 6,
+               'en-de-dot-product-0.1-3': 6,
+               'en-de-dot-product-1.0-3': 8,
                'en-de-dot-product-0.0-4': 7,
-               'en-de-dot-product-0.0-5': 7  # ,
-               # 'en-de-no-attn-0.0-1': 10,
-               # 'en-de-no-attn-0.0-2': 7,
-               # 'en-de-no-attn-0.0-3': 7,
-               # 'en-de-no-attn-0.0-4': 8,
-               # 'en-de-no-attn-0.0-5': 7
+               'en-de-dot-product-0.1-4': 6,
+               'en-de-dot-product-1.0-4': 8,
+               'en-de-dot-product-0.0-5': 7,
+               'en-de-dot-product-0.1-5': 7,
+               'en-de-dot-product-1.0-5': 7,
+               'en-de-uniform-0.0-1': 10,
+               'en-de-uniform-0.0-2': 7,
+               'en-de-uniform-0.0-3': 7,
+               'en-de-uniform-0.0-4': 8,
+               'en-de-uniform-0.0-5': 7,
+               'en-de-no-attn-0.0-1': 10,
+               'en-de-no-attn-0.0-2': 7,
+               'en-de-no-attn-0.0-3': 7,
+               'en-de-no-attn-0.0-4': 8,
+               'en-de-no-attn-0.0-5': 7,
+               'binary-flip-dot-product-0.0-1': 13,
+               'binary-flip-dot-product-0.1-1': 5,
+               'binary-flip-dot-product-1.0-1': 5,
+               'binary-flip-dot-product-0.0-2': 17,
+               'binary-flip-dot-product-0.1-2': 15,
+               'binary-flip-dot-product-1.0-2': 10,
+               'binary-flip-dot-product-0.0-3': 3,
+               'binary-flip-dot-product-0.1-3': 4,
+               'binary-flip-dot-product-1.0-3': 4,
+               'binary-flip-dot-product-0.0-4': 7,
+               'binary-flip-dot-product-0.1-4': 9,
+               'binary-flip-dot-product-1.0-4': 14,
+               'binary-flip-dot-product-0.0-5': 16,
+               'binary-flip-dot-product-0.1-5': 16,
+               'binary-flip-dot-product-1.0-5': 7,
+               'copy-dot-product-0.0-1': 6,
+               'copy-dot-product-0.1-1': 3,
+               'copy-dot-product-1.0-1': 8,
+               'copy-dot-product-0.0-2': 4,
+               'copy-dot-product-0.1-2': 12,
+               'copy-dot-product-1.0-2': 5,
                }
 
 
@@ -64,7 +65,7 @@ def get_trained_model(task, seed, coefficient, attention, best_epoch, decode_no_
 def evaluate_test(task, coefficient, seed, attention, batch_size=128):
     load_vocabulary(coefficient, task)
 
-    sentences = initialize_sentences(task, debug=False, num_train=100000, splits=SPLITS)
+    sentences = initialize_sentences(task, debug=False, num_train=100000, splits=SPLITS, data_path=DATA_PATH)
 
     _, _, test_batches = get_batches_from_sentences(sentences, batch_size, SRC_LANG, TRG_LANG)
 
@@ -87,17 +88,6 @@ def evaluate_test(task, coefficient, seed, attention, batch_size=128):
     # evaluate BLEU scores
     bleu_score = None
     if task == 'en-de':
-        # print('Generating translations ...')
-
-        # translation_path = get_translations_path(coefficient, best_epoch, seed, '_' + attention, task)
-        # command = ['compare-mt', f'{translation_path}.src.out', f'{translation_path}.test.out']
-        # output = subprocess.Popen(command, stdout=subprocess.PIPE).communicate()[0]
-        # python_output = output.decode("utf-8")
-        #
-        # bleu_index = python_output.index('BLEU    ')
-        # bleu_scor__e = python_output[bleu_index + 8:bleu_index + 8 + 5]
-        # print(bleu_score)
-
         _, _, bleu_score = generate_translations(model, sentences)
 
     return accuracy, attention_mass, bleu_score
@@ -236,14 +226,16 @@ def run_synthetic_experiments(clear_out=False, stage='train', seeds=None, tasks=
         tasks[1]: "Sequence Reverse",
         tasks[2]: "Bigram Flip"
     }
+
     print(coefficients)
+
     for attention, coefficient in zip(attentions, coefficients):
         data["Attention"].append(attention_names[attention])
         data["$\\lambda$"].append(coefficient)
 
         task = "copy"
         metrics = run_experiment(task, epochs, seeds, coefficient, attention, stage=stage,
-                                    num_sentences_train=num_sentences_train)
+                                 num_sentences_train=num_sentences_train)
 
         task_name = task_names[task]
         data[task_name + " Acc."].append(mean(metrics["acc"]))
@@ -252,10 +244,10 @@ def run_synthetic_experiments(clear_out=False, stage='train', seeds=None, tasks=
         if clear_out:
             clear_output(wait=True)
         ###
-        
+
         task = "reverse-copy"
         metrics = run_experiment(task, epochs, seeds, coefficient, attention, stage=stage,
-                                    num_sentences_train=num_sentences_train)
+                                 num_sentences_train=num_sentences_train)
 
         task_name = task_names[task]
         data[task_name + " Acc."].append(mean(metrics["acc"]))
@@ -264,10 +256,10 @@ def run_synthetic_experiments(clear_out=False, stage='train', seeds=None, tasks=
         if clear_out:
             clear_output(wait=True)
         ###
-        
+
         task = "binary-flip"
         metrics = run_experiment(task, epochs, seeds, coefficient, attention, stage=stage,
-                                    num_sentences_train=num_sentences_train)
+                                 num_sentences_train=num_sentences_train)
 
         task_name = task_names[task]
         data[task_name + " Acc."].append(mean(metrics["acc"]))
@@ -275,7 +267,7 @@ def run_synthetic_experiments(clear_out=False, stage='train', seeds=None, tasks=
 
         if clear_out:
             clear_output(wait=True)
-    
+
     print("Finished all experiments. Displaying ...")
 
     frame = pd.DataFrame(data)

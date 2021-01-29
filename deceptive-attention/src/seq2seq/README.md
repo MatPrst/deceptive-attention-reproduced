@@ -17,7 +17,7 @@ There are two main sections with allow for:
 In order to run evaluation with our pretrained models:
 
 1. Download the models from here TODO.
-2. Add them to the [`pretrained-models` folder](data/pretrained-models/).
+2. Add them to the [`models-pretrained` folder](data/models-pretrained/).
 3. Run respective cells in the notebook.
 
 The notebook will output tables with the respective means over all configured seeds for accuracy, attention mass and possibly BLEU score.

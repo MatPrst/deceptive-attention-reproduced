@@ -79,7 +79,7 @@ def get_target_sentences_as_list(data_batch, trg_lang):
     return target_sentences
 
 
-def bleu_score_nltk(target_sentences, candidates):
+def bleu_score_nltk(target_sentences, candidates, print_out=False):
     """
     Computes the (test) corpus wide BLEU score using the library NLTK. Takes a list of reference sentences
     (target sentences in target language) as well as candidates, transforms then into the expected format for NLTK
@@ -91,27 +91,13 @@ def bleu_score_nltk(target_sentences, candidates):
     # candidates are already words
     # targets are indices --> converting indices to word tokens
 
-    # target_sentences = get_target_sentences_as_list(references, trg_lang)
-    # for ref in references:
-    #     # getting the target indices and cutting off <eof> and <sos> from target sentences
-    #     trg_tokens = [trg_lang.get_word(w) for w in ref[2][0][1:-1]]
-    #     target_sentences.append([trg_tokens])
     candidate_sentences = [candidate.split() for candidate in candidates]
 
-    for i in range(len(candidate_sentences[:10])):
-        print('candidate ', candidate_sentences[i])
-        print('reference ', target_sentences[i])
-        print('\n')
-
-    # store files for computing BLEU score for compare-mt afterwards manually via the terminal
-    # references_file_path = f"{out_path}.ref.eng"
-    # candidates_file_path = f"{out_path}.cand.de"
-    #
-    # with open(references_file_path + '', 'w') as file_handler:
-    #     file_handler.write("\n".join(' '.join(item) for item in target_sentences))
-    #
-    # with open(candidates_file_path + '', 'w') as file_handler:
-    #     file_handler.write("\n".join(str(item) for item in candidates))
+    if print_out:
+        for i in range(len(candidate_sentences[:10])):
+            print('candidate ', candidate_sentences[i])
+            print('reference ', target_sentences[i])
+            print('\n')
 
     # Expected structure by NLTK
     # target Sentences: [[...], [...]]

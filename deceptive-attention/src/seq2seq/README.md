@@ -2,7 +2,7 @@
 
 This is about how to reproduce Table 4 and 4 in our reproduction report using the unidirectional and bidirectional GRU.
 
-Assuming [our environment `attention`](../../env.yml) has been properly installed and activated.
+Assuming [our environment `attention`](../../../env.yml) has been properly installed and activated.
 
 We provide the [Jupyter Notebook `experiments.ipynb`](experiments.ipynb) which allows to reproduce all the experiments.
 There are two main sections with allow for:

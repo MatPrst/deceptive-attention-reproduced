@@ -20,6 +20,17 @@ conda env create -f env.yml
 
 Please note that for the *replication* code, [```a separate environment```](deceptive-attention/src/classification/BERT_replication/BERT_env.yml) should be installed as this part of the code employs more recent libraries.
 
+## Datasets
+
+We do provide the data for all classification experiments in this repository. See the [classification data folder](deceptive-attention/src/classification/data) to check it out.
+
+For seq2seq tasks we have a compressed version of the data within this repo. In order to use it:
+
+1. Browse to the [seq2seq data folder](deceptive-attention/src/seq2seq/).
+2. Unzip the [data file](deceptive-attention/src/seq2seq/data.zip)
+
+Now when running experiments this data can be used by our models.
+
 ## Classification Reproduction
 
 

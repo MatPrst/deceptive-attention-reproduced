@@ -11,11 +11,12 @@ from data_utils import SentenceDataModule, TRG_LANG, SRC_LANG
 from log_utils import setup_logger
 from model import BiGRU
 
-DATA_PATH = "../data/"
 LOG_PATH = "logs/"
 LIGHTNING_LOGS = LOG_PATH + 'lightning_logs/'
 TERMINAL_LOGS = LOG_PATH + 'terminal_logs/'
-DATA_VOCAB_PATH = "vocab/"
+
+DATA_PATH = "../data/"
+DATA_VOCAB_PATH = DATA_PATH + "vocab/"
 
 
 class TranslationCallback(pl.Callback):

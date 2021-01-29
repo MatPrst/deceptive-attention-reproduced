@@ -30,12 +30,6 @@ We provide several IPython notebooks detailing all results from the respective p
 -
 - [```BERT replication notebook```](https://github.com/MatPrst/FACT/blob/main/deceptive-attention/src/classification/BERT_replication/BERT%20replication%20notebook%20completed.ipynb)
 
-
-## Running Experiments
-
-## Datasets
-
-
 ## Authors
 
 - Rahel Habacker

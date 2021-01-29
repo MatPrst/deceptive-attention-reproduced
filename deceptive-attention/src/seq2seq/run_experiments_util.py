@@ -90,9 +90,6 @@ def evaluate_test(task, coefficient, seed, attention, batch_size=128):
 
         _, _, bleu_score = generate_translations(model, sentences)
 
-    if torch.is_tensor(attention_mass):
-        attention_mass = attention_mass.item()
-
     return accuracy, attention_mass, bleu_score
 
 
@@ -110,6 +107,12 @@ def run_experiment(task, epochs, seed, coefficient, attention, stage='train'):
             acc, att_mass, bleu_score = train(task, coefficient, s, attention, epochs, num_train=10)
         elif stage == 'test':
             acc, att_mass, bleu_score = evaluate_test(task, coefficient, s, attention)
+
+        if torch.is_tensor(att_mass):
+            att_mass = att_mass.item()
+
+        if torch.is_tensor(acc):
+            acc = acc.item()
 
         if acc is not None:
             metrics["acc"].append(round(acc, 2))

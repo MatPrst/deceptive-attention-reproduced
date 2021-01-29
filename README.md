@@ -51,4 +51,4 @@ The original implementation and paper that we base on have been proposed by:
 Full credits for proposed methods used from this paper belong to these authors. Huge parts of the code we provide in this repository are based on their Github repository: \
 https://github.com/danishpruthi/deceptive-attention.
 
-In addition to that, we also use code from:
+Furthermore, a part of the code-base relies on the transformers library - however, we had to make several changes to some of the functionalities in this library, and therefore a local copy of this library - ` transformers_editted ` - is included in this repository. 

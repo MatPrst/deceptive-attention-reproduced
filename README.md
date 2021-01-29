@@ -23,15 +23,12 @@ pip install -r requirements.txt
 ```
 Please note that for the *replication* code, [```a separate environment```](./FACT/blob/main/deceptive-attention/src/classification/BERT_replication/BERT_env.yml) should be installed as this part of the code employs more recent libraries.
 
-## Visualizing Results
+## Running the experiments
 
-We provide several IPython notebooks detailing all results from the respective parts of our reproducibility report:
-
-- [```Classification reproduction notebook```](deceptive-attention/src/classification/classification.ipynb)
-- [```Seq2Seq reproduction notebook```](deceptive-attention/src/seq2seq/author-based/seq2seq.ipynb)
-- [```BERT replication notebook```](deceptive-attention/src/classification/BERT_replication/BERT%20replication%20notebook%20completed.ipynb)
-
-Besides the reproductions and replications, we also extended the code with LIME, a classifier explanation technique, in order to determine if other explanation techniques can be deceived alongside humans. Examples of LIME explaining samples from our Embeddings + Attention and BiLSTM + Attention models can be found in the [Lime Experiments IPython Notebook](deceptive-attention/src/classification/experiments-lime.ipynb).
+For the BERT replication, all 7 experiments for a specified task and seed can be produced by running:
+```
+python bert_main_pl_experiments.py
+```
 
 ## Authors
 

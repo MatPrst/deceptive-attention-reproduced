@@ -24,7 +24,16 @@ from train import *
 #                'en-de-no-attn-0.0-2': 7,
 #                'en-de-no-attn-0.0-3': 7,
 #                'en-de-no-attn-0.0-4': 8,
-#                'en-de-no-attn-0.0-5': 7
+#                'en-de-no-attn-0.0-5': 7,
+#                'binary-flip-dot-product-0.0-1': 13,
+#                'binary-flip-dot-product-0.1-1': 5,
+#                'binary-flip-dot-product-1.0-1': 5,
+#                'binary-flip-dot-product-0.0-2': 17,
+#                'binary-flip-dot-product-0.1-2': 15,
+#                'binary-flip-dot-product-1.0-2': 10,
+#                'binary-flip-dot-product-0.0-3': 3,
+#                'binary-flip-dot-product-0.1-3': 4,
+#                'binary-flip-dot-product-1.0-3': 4,
 #                }
 
 BEST_EPOCHS = {'en-de-dot-product-0.0-1': 7,
@@ -45,6 +54,7 @@ def get_trained_model(task, seed, coefficient, attention, best_epoch, decode_no_
                                               decode_no_att_inference, logger)
     map_location = torch.cuda if torch.cuda.is_available() else torch.device('cpu')
     model_path = get_model_path(task, attention, seed, coefficient, best_epoch)
+    model_path.replace('models', 'models-pretrained')
     print(f'Loading model with path: {model_path}')
     model_object = torch.load(model_path, map_location=map_location)
     model.load_state_dict(model_object)
@@ -90,13 +100,10 @@ def evaluate_test(task, coefficient, seed, attention, batch_size=128):
 
         _, _, bleu_score = generate_translations(model, sentences)
 
-    if torch.is_tensor(attention_mass):
-        attention_mass = attention_mass.item()
-
     return accuracy, attention_mass, bleu_score
 
 
-def run_experiment(task, epochs, seed, coefficient, attention, stage='train'):
+def run_experiment(task, epochs, seed, coefficient, attention, stage='train', num_sentences_train=1000000):
     if type(seed) is int:
         seed = [seed]
 
@@ -107,21 +114,28 @@ def run_experiment(task, epochs, seed, coefficient, attention, stage='train'):
         acc, att_mass, bleu_score = None, None, None
 
         if stage == 'train':
-            acc, att_mass, bleu_score = train(task, coefficient, s, attention, epochs, num_train=10)
+            acc, att_mass, bleu_score = train(task, coefficient, s, attention, epochs, num_train=num_sentences_train)
         elif stage == 'test':
             acc, att_mass, bleu_score = evaluate_test(task, coefficient, s, attention)
 
+        if torch.is_tensor(att_mass):
+            att_mass = att_mass.item()
+
+        if torch.is_tensor(acc):
+            acc = acc.item()
+
         if acc is not None:
-            metrics["acc"].append(round(acc, 2))
+            metrics["acc"].append(acc)
         if att_mass is not None:
-            metrics["att_mass"].append(round(att_mass, 2))
+            metrics["att_mass"].append(att_mass)
         if bleu_score is not None:
-            metrics["bleu_score"].append(round(bleu_score, 2))
+            metrics["bleu_score"].append(bleu_score)
 
     return metrics
 
 
-def run_en_de_experiments(clear_out=False, stage='train', seeds=None, coefficients=None, attentions=None, epochs=None):
+def run_en_de_experiments(clear_out=False, stage='train', seeds=None, coefficients=None, attentions=None, epochs=None,
+                          num_sentences_train=1000000):
     if clear_out:
         clear_output(wait=True)
 
@@ -144,8 +158,11 @@ def run_en_de_experiments(clear_out=False, stage='train', seeds=None, coefficien
         "Attention": [],
         "$\\lambda$": [],
         "BLEU (NLTK)": [],
+        "BLEU Std.": [],
         "Accuracy": [],
-        "Attention Mass": []
+        "Acc. Std.": [],
+        "Attention Mass": [],
+        "A.M. Std.": [],
     }
 
     attention_names = {
@@ -159,22 +176,28 @@ def run_en_de_experiments(clear_out=False, stage='train', seeds=None, coefficien
             data["Attention"].append(attention_names[attention])
             data["$\\lambda$"].append(coefficient)
 
-            metrics = run_experiment(task, epochs, seeds, coefficient, attention, stage=stage)
+            metrics = run_experiment(task, epochs, seeds, coefficient, attention, stage=stage,
+                                     num_sentences_train=num_sentences_train)
 
             data['Accuracy'].append(mean(metrics["acc"]))
+            data['Acc. Std.'].append(std(metrics["acc"]))
             data['Attention Mass'].append(mean(metrics["att_mass"]))
+            data['A.M. Std.'].append(std(metrics["att_mass"]))
             data['BLEU (NLTK)'].append(mean(metrics["bleu_score"]))
+            data['BLEU Std.'].append(std(metrics["bleu_score"]))
 
             if clear_out:
                 clear_output(wait=True)
 
     print("Finished all experiments. Displaying ...")
 
-    return pd.DataFrame(data)
+    data_frame = pd.DataFrame(data)
+    data_frame.style.set_properties(**{'text-align': 'center'})
+    return data_frame
 
 
 def run_synthetic_experiments(clear_out=False, stage='train', seeds=None, tasks=None, coefficients=None,
-                              attentions=None, epochs=None):
+                              attentions=None, epochs=None, num_sentences_train=1000000):
     if clear_out:
         clear_output(wait=True)
 
@@ -183,10 +206,10 @@ def run_synthetic_experiments(clear_out=False, stage='train', seeds=None, tasks=
 
     if tasks is None:
         tasks = ['copy', 'reverse-copy', 'binary-flip']
-        coefficients = [0.0, 1.0, 0.1]
+        coefficients = [0.0, 0.1, 1.0, 0.0, 0.0]
 
     if attentions is None:
-        attentions = ['dot-product', 'uniform', 'no-attention']
+        attentions = ['dot-product', 'dot-product', 'dot-product', 'uniform', 'no-attention']
 
     if epochs is None:
         epochs = 30
@@ -194,18 +217,18 @@ def run_synthetic_experiments(clear_out=False, stage='train', seeds=None, tasks=
     data = {
         "Attention": [],
         "$\\lambda$": [],
-        "Bigram Flip acc": [],
-        "Bigram Flip att-mass": [],
-        "Sequence Copy acc": [],
-        "Sequence Copy att-mass": [],
-        "Sequence Reverse acc": [],
-        "Sequence Reverse att-mass": []
+        "Bigram Flip Acc.": [],
+        "Bigram Flip A.M.": [],
+        "Sequence Copy Acc.": [],
+        "Sequence Copy A.M.": [],
+        "Sequence Reverse Acc.": [],
+        "Sequence Reverse A.M.": []
     }
 
     attention_names = {
-        attentions[0]: "Dot-Product",
-        attentions[1]: attentions[1].capitalize(),
-        attentions[2]: "None"
+        "dot-product": "Dot-Product",
+        "uniform": "Uniform",
+        "no-attention": "None"
     }
 
     task_names = {
@@ -213,25 +236,51 @@ def run_synthetic_experiments(clear_out=False, stage='train', seeds=None, tasks=
         tasks[1]: "Sequence Reverse",
         tasks[2]: "Bigram Flip"
     }
+    print(coefficients)
+    for attention, coefficient in zip(attentions, coefficients):
+        data["Attention"].append(attention_names[attention])
+        data["$\\lambda$"].append(coefficient)
 
-    for task in tasks:
-        for attention in attentions:
-            for coefficient in get_coefficients(attention, coefficients):
-                data["Attention"].append(attention_names[attention])
-                data["$\\lambda$"].append(coefficient)
+        task = "copy"
+        metrics = run_experiment(task, epochs, seeds, coefficient, attention, stage=stage,
+                                    num_sentences_train=num_sentences_train)
 
-                metrics = run_experiment(task, epochs, seeds, coefficient, attention, stage=stage)
+        task_name = task_names[task]
+        data[task_name + " Acc."].append(mean(metrics["acc"]))
+        data[task_name + " A.M."].append(mean(metrics["att_mass"]))
 
-                task_name = task_names[task]
-                data[task_name + " acc"].append(mean(metrics["acc"]))
-                data[task_name + " att-mass"].append(mean(metrics["att_mass"]))
+        if clear_out:
+            clear_output(wait=True)
+        ###
+        
+        task = "reverse-copy"
+        metrics = run_experiment(task, epochs, seeds, coefficient, attention, stage=stage,
+                                    num_sentences_train=num_sentences_train)
 
-                if clear_out:
-                    clear_output(wait=True)
+        task_name = task_names[task]
+        data[task_name + " Acc."].append(mean(metrics["acc"]))
+        data[task_name + " A.M."].append(mean(metrics["att_mass"]))
 
+        if clear_out:
+            clear_output(wait=True)
+        ###
+        
+        task = "binary-flip"
+        metrics = run_experiment(task, epochs, seeds, coefficient, attention, stage=stage,
+                                    num_sentences_train=num_sentences_train)
+
+        task_name = task_names[task]
+        data[task_name + " Acc."].append(mean(metrics["acc"]))
+        data[task_name + " A.M."].append(mean(metrics["att_mass"]))
+
+        if clear_out:
+            clear_output(wait=True)
+    
     print("Finished all experiments. Displaying ...")
 
-    return pd.DataFrame(data)
+    frame = pd.DataFrame(data)
+    frame.style.set_properties(**{'text-align': 'center'})
+    return frame
 
 
 def get_coefficients(attention, coefficients):
@@ -241,4 +290,13 @@ def get_coefficients(attention, coefficients):
 def mean(data):
     if data is None or len(data) == 0:
         return -1
-    return sum(data) / len(data)
+    return round(sum(data) / len(data), 2)
+
+
+def std(data):
+    n = len(data)
+    if n == 0:
+        return -1
+    mn = mean(data)
+    deviations = [(x - mn) ** 2 for x in data]
+    return round(sum(deviations) / n, 2)

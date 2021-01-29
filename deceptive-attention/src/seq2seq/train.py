@@ -306,6 +306,7 @@ def initialize_model(attention, encoder_emb_dim, decoder_emb_dim, encoder_hid_di
 
     return optimizer, criterion, model, suffix
 
+
 def load_vocabulary(coefficient, task):
     # load vocabulary if already present
     vocab_prefix = DATA_PATH + task + '_coeff=' + str(coefficient)

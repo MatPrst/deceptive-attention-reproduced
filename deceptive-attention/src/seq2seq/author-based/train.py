@@ -1,12 +1,14 @@
-import argparse
 import math
 import os
 import random
+import subprocess
 import time
 
+import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from IPython.display import clear_output
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
@@ -77,25 +79,10 @@ PAD_IDX = utils.PAD_token
 SOS_IDX = utils.SOS_token
 EOS_IDX = utils.EOS_token
 
-# UNIFORM = params['uniform']
-# NO_ATTN = params['no_attn']
-
-# can have values 'dot-product', 'uniform', or 'no-attention'
-ATTENTION = params['attention']
-
-NUM_TRAIN = params['num_train']
-DECODE_WITH_NO_ATTN = params['no_attn_inference']
-
-# INPUT_VOCAB = 10000
-# OUTPUT_VOCAB = 10000
-
 SRC_LANG = Language('src')
 TRG_LANG = Language('trg')
 
 SPLITS = ['train', 'dev', 'test']
-
-SEED = params['seed']
-BATCH_SIZE = params['batch_size']
 
 
 # The following function is not being used right now, and is deprecated.
@@ -295,10 +282,17 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-def initialize_model(attention, encoder_emb_dim, decoder_emb_dim, encoder_hid_dim, decoder_hid_dim, logger):
+def initialize_model(attention, encoder_emb_dim, decoder_emb_dim, encoder_hid_dim, decoder_hid_dim,
+                     decode_no_att_inference, logger=None):
     input_dim = SRC_LANG.get_vocab_size()
     output_dim = TRG_LANG.get_vocab_size()
-    logger.info(f"Input vocabulary size {input_dim} and output vocabulary size {output_dim}.")
+
+    ## TODO: Work around because vocab seems to differ by 1 for CUDA and CPU models
+    if not torch.cuda.is_available():
+        output_dim += 1
+
+    if logger is not None:
+        logger.info(f"Input vocabulary size {input_dim} and output vocabulary size {output_dim}.")
 
     suffix = ""
 
@@ -308,7 +302,7 @@ def initialize_model(attention, encoder_emb_dim, decoder_emb_dim, encoder_hid_di
     if attention == 'uniform':
         dec = DecoderUniform(output_dim, decoder_emb_dim, encoder_hid_dim, decoder_hid_dim, DEC_DROPOUT, attn)
         suffix = "_uniform"
-    elif attention == 'no-attention' or DECODE_WITH_NO_ATTN:
+    elif attention == 'no-attention' or decode_no_att_inference:
         dec = DecoderNoAttn(output_dim, decoder_emb_dim, encoder_hid_dim, decoder_hid_dim, DEC_DROPOUT, attn)
         if attention == 'no-attention':
             suffix = "_no-attn"
@@ -321,35 +315,13 @@ def initialize_model(attention, encoder_emb_dim, decoder_emb_dim, encoder_hid_di
     model.apply(init_weights)
 
     # count the params
-    logger.info(f'The model has {count_parameters(model):,} trainable parameters.\n')
+    if logger is not None:
+        logger.info(f'The model has {count_parameters(model):,} trainable parameters.\n')
 
     optimizer = optim.Adam(model.parameters())
     criterion = nn.CrossEntropyLoss(ignore_index=PAD_IDX)
 
     return optimizer, criterion, model, suffix
-
-
-# def evaluate_test(task, coefficient, seed, model='best'):
-#     """
-#
-#     """
-#
-#     if model == 'best':
-#         # load the best model for the given settings
-#         pass
-#     elif model == 'latest':
-#         # load the latest model for the given settings
-#         pass
-#
-#     load_vocabulary(coefficient, task)
-#
-#     sentences = initialize_sentences(task, debug=False, num_train=100000, splits=SPLITS)
-#
-#     _, _, test_batches = get_batches_from_sentences(sentences, BATCH_SIZE, SRC_LANG, TRG_LANG)
-#
-#     criterion = nn.CrossEntropyLoss(ignore_index=PAD_IDX)
-#
-#     return evaluate(model, test_batches, criterion)
 
 
 def load_vocabulary(coefficient, task):
@@ -364,20 +336,28 @@ def load_vocabulary(coefficient, task):
         TRG_LANG.load_vocab(trg_vocab_path)
 
 
-def train(task=TASK,
-          epochs=EPOCHS,
-          coeff=COEFF,
-          seed=SEED,
-          batch_size=BATCH_SIZE,
-          attention=ATTENTION,
-          debug=DEBUG,
-          num_train=NUM_TRAIN,
+def train(task,
+          coeff,
+          seed,
+          attention,
+          epochs=30,
+          batch_size=128,
+          decode_no_att_inference=False,
+          tensorboard_log=False,
+          debug=False,
+          num_train=1000000,
           encoder_emb_dim=ENC_EMB_DIM,
           decoder_emb_dim=DEC_EMB_DIM,
           encoder_hid_dim=ENC_HID_DIM,
-          decoder_hid_dim=DEC_HID_DIM,
-          tensorboard_log=TENSORBOARD_LOG):
-    set_seed(SEED)
+          decoder_hid_dim=DEC_HID_DIM):
+    # Create directories if not already existent
+    os.makedirs(LOG_PATH, exist_ok=True)
+    os.makedirs(DATA_PATH, exist_ok=True)
+    os.makedirs(DATA_MODELS_PATH, exist_ok=True)
+    os.makedirs(DATA_VOCAB_PATH, exist_ok=True)
+    os.makedirs(DATA_TRANSLATIONS_PATH, exist_ok=True)
+
+    set_seed(seed)
 
     writer = None
     if tensorboard_log:
@@ -399,15 +379,13 @@ def train(task=TASK,
 
     # setup the model
     optimizer, criterion, model, suffix = initialize_model(attention, encoder_emb_dim, decoder_emb_dim, encoder_hid_dim,
-                                                           decoder_hid_dim, logger)
+                                                           decoder_hid_dim, decode_no_att_inference, logger)
 
     best_valid_loss = float('inf')
     convergence_time = 0.0
     epochs_taken_to_converge = 0
 
     no_improvement_last_time = False
-
-    model_path = f'{DATA_MODELS_PATH}model_{task}{suffix}_seed={str(seed)}_coeff={str(coeff)}_epoch=%s.pt'
 
     for epoch in range(epochs):
 
@@ -432,7 +410,7 @@ def train(task=TASK,
         if val_loss < best_valid_loss:
             best_valid_loss = val_loss
             epochs_taken_to_converge = epoch + 1
-            torch.save(model.state_dict(), model_path % epochs_taken_to_converge)
+            torch.save(model.state_dict(), get_model_path(task, attention, seed, coeff, epochs_taken_to_converge))
             convergence_time += (end_time - start_time)
             no_improvement_last_time = False
         else:
@@ -448,7 +426,7 @@ def train(task=TASK,
             |  Val. Attn Mass: {val_attn_mass:0.2f} |  Val. PPL: {math.exp(val_loss):7.3f}')
 
     # load the best model and print stats:
-    model.load_state_dict(torch.load(model_path % epochs_taken_to_converge))
+    model.load_state_dict(torch.load(get_model_path(task, attention, seed, coeff, epochs_taken_to_converge)))
 
     test_loss, test_acc, test_attn_mass = evaluate(model, test_batches, criterion)
     logger.info(f'\t Test Loss: {test_loss:.3f} |  Test Acc: {test_acc:0.2f} \
@@ -459,16 +437,16 @@ def train(task=TASK,
     logger.info(f"Convergence time in seconds ..\t{convergence_time:0.2f}")
     logger.info(f"Sample efficiency in epochs ..\t{epochs_taken_to_converge}")
 
-    data_out_path = f"{task}{suffix}_seed={str(seed)}_coeff={str(coeff)}_epoch={str(epochs_taken_to_converge)}"
-    vocab_out_path = f"{DATA_VOCAB_PATH}{data_out_path}"
+    vocab_out_path = get_vocab_path(coeff, epochs_taken_to_converge, seed, suffix, task)
     SRC_LANG.save_vocab(f"{vocab_out_path}.src.vocab")
     TRG_LANG.save_vocab(f"{vocab_out_path}.trg.vocab")
 
+    bleu_score = None
     if task in ['en-hi', 'en-de']:
         # generate the output to compute bleu scores as well...
         logger.info("Generating the output translations from the model.")
 
-        translations_out_path = f"{DATA_TRANSLATIONS_PATH}{data_out_path}"
+        translations_out_path = get_translations_path(coeff, epochs_taken_to_converge, seed, suffix, task)
         translations, src_sentences, bleu_score = generate_translations(model, sentences)
 
         logger.info(f"BLEU score ..........\t{bleu_score:0.2f}")
@@ -492,6 +470,26 @@ def train(task=TASK,
 
     if writer is not None:
         writer.close()
+
+    return test_acc, test_attn_mass, bleu_score
+
+
+def get_vocab_path(coeff, epochs_taken_to_converge, seed, suffix, task):
+    data_out_path = get_data_path(coeff, epochs_taken_to_converge, seed, suffix, task)
+    return f"{DATA_VOCAB_PATH}{data_out_path}"
+
+
+def get_translations_path(coeff, epochs_taken_to_converge, seed, suffix, task):
+    data_out_path = get_data_path(coeff, epochs_taken_to_converge, seed, suffix, task)
+    return f"{DATA_TRANSLATIONS_PATH}{data_out_path}"
+
+
+def get_data_path(coeff, epochs_taken_to_converge, seed, suffix, task):
+    return f"{task}{suffix}_seed={str(seed)}_coeff={str(coeff)}_epoch={str(epochs_taken_to_converge)}"
+
+
+def get_model_path(task, attention, seed, coeff, epochs_taken_to_converge):
+    return f'{DATA_MODELS_PATH}model_{task}_attention={attention}_seed={str(seed)}_coeff={str(coeff)}_epoch={epochs_taken_to_converge}.pt'
 
 
 def epoch_time(start_time, end_time):

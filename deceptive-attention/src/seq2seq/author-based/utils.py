@@ -79,7 +79,7 @@ def get_target_sentences_as_list(data_batch, trg_lang):
     return target_sentences
 
 
-def bleu_score_nltk(target_sentences, candidates):
+def bleu_score_nltk(target_sentences, candidates, print_out=False):
     """
     Computes the (test) corpus wide BLEU score using the library NLTK. Takes a list of reference sentences
     (target sentences in target language) as well as candidates, transforms then into the expected format for NLTK
@@ -92,6 +92,12 @@ def bleu_score_nltk(target_sentences, candidates):
     # targets are indices --> converting indices to word tokens
 
     candidate_sentences = [candidate.split() for candidate in candidates]
+
+    if print_out:
+        for i in range(len(candidate_sentences[:10])):
+            print('candidate ', candidate_sentences[i])
+            print('reference ', target_sentences[i])
+            print('\n')
 
     # Expected structure by NLTK
     # target Sentences: [[...], [...]]

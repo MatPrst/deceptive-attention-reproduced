@@ -27,22 +27,6 @@ def initialize_sentences(task, debug, num_train, splits, data_path):
 
         sentences.append([src_sentences, trg_sentences, alignment_sentences])
 
-    # train_sentences = sentences[0]
-
-    '''
-    train_src_sents = train_sents[0]
-    train_trg_sents = train_sents[1]
-    train_alignments = train_sents[2]
-    top_src_words = compute_frequencies(train_src_sents, INPUT_VOCAB)
-    top_trg_words = compute_frequencies(train_trg_sents, OUTPUT_VOCAB)
-
-    train_src_sents = unkify_lines(train_src_sents, top_src_words)
-    train_trg_sents = unkify_lines(train_trg_sents, top_trg_words)
-    train_sents = train_src_sents, train_trg_sents
-    '''
-
-    # dev_sentences = sentences[1]
-    # test_sentences = sentences[2]
     return sentences
 
 

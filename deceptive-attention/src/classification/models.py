@@ -11,7 +11,7 @@ if torch.cuda.is_available():
 
 class EmbAttModel(nn.Module):
     def __init__(self, vocabulary, emb_dim):
-        super(EmbAttModel, self).__init__()
+        super().__init__()
 
         # layers
         self.embedding_layer = nn.Embedding(vocabulary.n_words, emb_dim)
@@ -54,7 +54,7 @@ class EmbAttModel(nn.Module):
 
         pred, _ = self.forward(w_indices, block_ids_t)
         prediction_probabilities = pred[0].softmax(dim=0)
-        all_predictions.append(prediction_probabilities.detach().numpy())
+        all_predictions.append(prediction_probabilities.detach().cpu().numpy())
 
         # predict all other samples without block_ids (because we don't know them)
         for instance in lime_instance[1:]:
@@ -63,7 +63,7 @@ class EmbAttModel(nn.Module):
 
             pred, _ = self.forward(indices)
 
-            all_predictions.append(pred[0].softmax(dim=0).detach().numpy())
+            all_predictions.append(pred[0].softmax(dim=0).detach().cpu().numpy())
 
         # check that we have predictions for all neighborhood examples
         assert len(lime_instance) == len(all_predictions)
@@ -98,7 +98,7 @@ class EmbAttModel(nn.Module):
 
 class BiLSTMAttModel(nn.Module):
     def __init__(self, vocabulary, emb_dim, hid_dim):
-        super(BiLSTMAttModel, self).__init__()
+        super().__init__()
 
         # layers
         self.embedding_layer = nn.Embedding(vocabulary.n_words, emb_dim)
@@ -142,7 +142,7 @@ class BiLSTMAttModel(nn.Module):
 
         pred, _ = self.forward(w_indices, block_ids_t)
         prediction_probabilities = pred[0].softmax(dim=0)
-        all_predictions.append(prediction_probabilities.detach().numpy())
+        all_predictions.append(prediction_probabilities.detach().cpu().numpy())
 
         # predict all other samples without block_ids (because we don't know them)
         for instance in lime_instance[1:]:
@@ -151,7 +151,7 @@ class BiLSTMAttModel(nn.Module):
 
             pred, _ = self.forward(indices)
 
-            all_predictions.append(pred[0].softmax(dim=0).detach().numpy())
+            all_predictions.append(pred[0].softmax(dim=0).detach().cpu().numpy())
 
         # check that we have predictions for all neighborhood examples
         assert len(lime_instance) == len(all_predictions)

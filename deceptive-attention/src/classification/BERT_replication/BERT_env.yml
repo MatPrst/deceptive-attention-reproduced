@@ -1,0 +1,16 @@
+name: attention2
+channels:
+  - pytorch
+  - defaults
+dependencies:
+  - pip=20.0.2
+  - pytorch=1.7.1
+  - spacy=2.3.5
+  - pip:
+    - matplotlib==3.2.1
+    - torchtext==0.6.0
+    - tabulate==0.8.7
+    - pytorch-lightning==1.1.4
+    - pandas==1.2.0
+    - packaging==20.8
+prefix: ~/anaconda3/envs/attention2

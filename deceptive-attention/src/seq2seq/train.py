@@ -19,45 +19,6 @@ from log_utils import *
 from models import Attention, Seq2Seq, Encoder, Decoder, DecoderNoAttn, DecoderUniform
 from utils import *
 
-# BEST_EPOCHS = {'en-de-dot-product-0.0-1': 7,
-#                'en-de-dot-product-0.1-1': 8,
-#                'en-de-dot-product-1.0-1': 7,
-#                'en-de-dot-product-0.0-2': 6,
-#                'en-de-dot-product-0.1-2': 9,
-#                'en-de-dot-product-1.0-2': 7,
-#                'en-de-dot-product-0.0-3': 6,
-#                'en-de-dot-product-0.1-3': 6,
-#                'en-de-dot-product-1.0-3': 8,
-#                'en-de-dot-product-0.0-4': 7,
-#                'en-de-dot-product-0.1-4': 6,
-#                'en-de-dot-product-1.0-4': 8,
-#                'en-de-dot-product-0.0-5': 7,
-#                'en-de-dot-product-0.1-5': 7,
-#                'en-de-dot-product-1.0-5': 7,
-#                'en-de-uniform-0.0-1': 10,
-#                'en-de-uniform-0.0-2': 7,
-#                'en-de-uniform-0.0-3': 7,
-#                'en-de-uniform-0.0-4': 8,
-#                'en-de-uniform-0.0-5': 7,
-#                'en-de-no-attn-0.0-1': 10,
-#                'en-de-no-attn-0.0-2': 7,
-#                'en-de-no-attn-0.0-3': 7,
-#                'en-de-no-attn-0.0-4': 8,
-#                'en-de-no-attn-0.0-5': 7
-#                }
-
-BEST_EPOCHS = {'en-de-dot-product-0.0-1': 7,
-               'en-de-dot-product-0.0-2': 6,
-               'en-de-dot-product-0.0-3': 6,
-               'en-de-dot-product-0.0-4': 7,
-               'en-de-dot-product-0.0-5': 7  # ,
-               # 'en-de-no-attn-0.0-1': 10,
-               # 'en-de-no-attn-0.0-2': 7,
-               # 'en-de-no-attn-0.0-3': 7,
-               # 'en-de-no-attn-0.0-4': 8,
-               # 'en-de-no-attn-0.0-5': 7
-               }
-
 # --------------- non-determinism issues with RNN methods ----------------- #
 # https://pytorch.org/docs/stable/generated/torch.nn.LSTM.html#torch.nn.LSTM
 # CUDA 10.1
@@ -307,7 +268,12 @@ def count_parameters(model):
 def initialize_model(attention, encoder_emb_dim, decoder_emb_dim, encoder_hid_dim, decoder_hid_dim,
                      decode_no_att_inference, logger=None):
     input_dim = SRC_LANG.get_vocab_size()
-    output_dim = TRG_LANG.get_vocab_size() + 1
+    output_dim = TRG_LANG.get_vocab_size()
+
+    ## TODO: Work around because vocab seems to differ by 1 for CUDA and CPU models
+    if not torch.cuda.is_available():
+        output_dim += 1
+
     if logger is not None:
         logger.info(f"Input vocabulary size {input_dim} and output vocabulary size {output_dim}.")
 
@@ -339,72 +305,6 @@ def initialize_model(attention, encoder_emb_dim, decoder_emb_dim, encoder_hid_di
     criterion = nn.CrossEntropyLoss(ignore_index=PAD_IDX)
 
     return optimizer, criterion, model, suffix
-
-
-def get_trained_model(task, seed, coefficient, attention, best_epoch, decode_no_att_inference=False, logger=None):
-    _, criterion, model, _ = initialize_model(attention, ENC_EMB_DIM, DEC_EMB_DIM, ENC_HID_DIM, DEC_HID_DIM,
-                                              decode_no_att_inference, logger)
-    map_location = torch.cuda if torch.cuda.is_available() else torch.device('cpu')
-    model_path = get_model_path(task, attention, seed, coefficient, best_epoch)
-    print(f'Loading model with path: {model_path}')
-    model_object = torch.load(model_path, map_location=map_location)
-    model.load_state_dict(model_object)
-    return model, criterion
-
-
-def evaluate_test(task, coefficient, seed, attention, batch_size=128):
-    load_vocabulary(coefficient, task)
-
-    sentences = initialize_sentences(task, debug=False, num_train=100000, splits=SPLITS)
-
-    _, _, test_batches = get_batches_from_sentences(sentences, batch_size, SRC_LANG, TRG_LANG)
-
-    # load the best model for the given settings
-    # model_en-de_seed=1_coeff=0.1_num-train=1000000.pt
-
-    epoch_key = '-'.join([task, attention, str(coefficient), str(seed)])
-    if epoch_key not in BEST_EPOCHS:
-        print(f'Could not find file. Proceeding to next model.')
-        return None, None, None
-
-    best_epoch = BEST_EPOCHS[epoch_key]
-
-    try:
-        model, criterion = get_trained_model(task, seed, coefficient, attention, best_epoch)
-    except FileNotFoundError:
-        print(f'Could not find file. Proceeding to next model.')
-        return None, None, None
-
-    print('Evaluating ...')
-
-    _, accuracy, attention_mass = evaluate(model, test_batches, criterion)
-
-    # evaluate BLEU scores
-    bleu_score = None
-    if task == 'en-de':
-        print('Generating translations ...')
-
-        # translation_path = get_translations_path(coefficient, best_epoch, seed, '_' + attention, task)
-        # command = ['compare-mt', f'{translation_path}.src.out', f'{translation_path}.test.out']
-        # output = subprocess.Popen(command, stdout=subprocess.PIPE).communicate()[0]
-        # python_output = output.decode("utf-8")
-        #
-        # bleu_index = python_output.index('BLEU    ')
-        # bleu_scor__e = python_output[bleu_index + 8:bleu_index + 8 + 5]
-        # print(bleu_score)
-
-        _, _, bleu_score = generate_translations(model, sentences)
-        bleu_score = round(bleu_score, 2)
-        print(bleu_score)
-
-    if torch.is_tensor(attention_mass):
-        attention_mass = attention_mass.item()
-        attention_mass = round(attention_mass, 2)
-
-    accuracy = round(accuracy, 2)
-
-    return accuracy, attention_mass, bleu_score
-
 
 def load_vocabulary(coefficient, task):
     # load vocabulary if already present
@@ -589,137 +489,3 @@ def generate_translations(model, sentences):
         targets.append(sentence)
 
     return output_lines, targets, bleu_nltk * 100  # report it in percentage
-
-
-def run_experiment(task, epochs, seed, coefficient, attention, stage='train'):
-    if type(seed) is int:
-        seed = [seed]
-
-    metrics = {"acc": [], "att_mass": [], 'bleu_score': []}
-
-    for s in seed:
-        print(f'Configuration: coeff: {coefficient} seed: {s} attention: {attention} device: {DEVICE} task: {task}')
-        acc, att_mass, bleu_score = None, None, None
-
-        if stage == 'train':
-            acc, att_mass, bleu_score = train(task, coefficient, s, attention, epochs, num_train=10)
-        elif stage == 'test':
-            acc, att_mass, bleu_score = evaluate_test(task, coefficient, s, attention)
-
-        if acc is not None:
-            metrics["acc"].append(acc)
-        if att_mass is not None:
-            metrics["att_mass"].append(att_mass)
-        if bleu_score is not None:
-            metrics["bleu_score"].append(bleu_score)
-
-    return metrics
-
-
-def run_en_de_experiments(clear_out=False, stage='train'):
-    if clear_out:
-        clear_output(wait=True)
-
-    seeds = [1, 2, 3, 4, 5]
-    task = 'en-de'
-    task_name = "English German"
-    coefficients = [[0.0, 1.0, 0.1], [0.0], [0.0]]
-    attentions = ['dot-product', 'uniform', 'no-attention']
-    epochs = 1
-
-    data = {
-        "Attention": [],
-        "$\\lambda$": [],
-        "BLEU (NLTK)": [],
-        "Accuracy": [],
-        "Attention Mass": []
-    }
-
-    attention_names = {
-        attentions[0]: "Dot-Product",
-        attentions[1]: attentions[1].capitalize(),
-        attentions[2]: "None"
-    }
-
-    bleu_compare_mt = []
-
-    for coefficient_lst, attention in zip(coefficients, attentions):
-        for coefficient in coefficient_lst:
-            data["Attention"].append(attention_names[attention])
-            data["$\lambda$"].append(coefficient)
-
-            metrics = run_experiment(task, epochs, seeds, coefficient, attention, stage=stage)
-
-            data['Accuracy'].append(mean(metrics["acc"]))
-            data['Attention Mass'].append(mean(metrics["att_mass"]))
-            data['BLEU (NLTK)'].append(mean(metrics["bleu_score"]))
-
-            if clear_out:
-                clear_output(wait=True)
-
-            # compute compare-mt
-            # bleu_compare_mt.append(metrics['translation_paths'])
-
-    print("finished")
-    print(data)
-    return pd.DataFrame(data)  # , bleu_compare_mt
-
-
-def run_synthetic_experiments(clear_out=False):
-    if clear_out:
-        clear_output(wait=True)
-
-    seeds = [1, 2, 3, 4, 5]
-    tasks = ['copy', 'reverse-copy', 'binary-flip', 'en-de']
-    coefficients = [[0.0, 1.0, 0.1], [0.0], [0.0]]
-    attentions = ['dot-product', 'uniform', 'no-attention']
-    epochs = 1
-
-    data = {
-        "Attention": [],
-        "$\\lambda$": [],
-        "Bigram Flip acc": [],
-        "Bigram Flip att-mass": [],
-        "Sequence Copy acc": [],
-        "Sequence Copy att-mass": [],
-        "Sequence Reverse acc": [],
-        "Sequence Reverse att-mass": []
-    }
-
-    attention_names = {
-        attentions[0]: "Dot-Product",
-        attentions[1]: attentions[1].capitalize(),
-        attentions[2]: "None"
-    }
-
-    task_names = {
-        tasks[0]: "Sequence Copy",
-        tasks[1]: "Sequence Reverse",
-        tasks[2]: "Bigram Flip",
-        tasks[3]: "English German"
-    }
-
-    for task in tasks:
-        for coefficient_lst, attention in zip(coefficients, attentions):
-
-            for coefficient in coefficient_lst:
-                data["Attention"].append(attention_names[attention])
-                data["$\lambda$"].append(coefficient)
-
-                metrics = run_experiment(task, epochs, seeds, coefficient, attention)
-
-                task_name = task_names[task]
-                data[task_name + " acc"].append(mean(metrics["acc"]))
-                data[task_name + " att-mass"].append(mean(metrics["att_mass"]))
-
-                if clear_out:
-                    clear_output(wait=True)
-
-    print("finished")
-    return pd.DataFrame(data)
-
-
-def mean(data):
-    if data is None or len(data) == 0:
-        return -1
-    return sum(data) / len(data)

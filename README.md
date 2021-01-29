@@ -2,6 +2,11 @@
 
 This repository and paper have been conducted during the Fairness, Accountability, Confidentiality and Transparency (FACT) course at University of Amsterdam. 
 Starting off with reproducing the original paper `Learning to Deceive with Attention-Based Explanations` we extend upon it with <TODO>.
+  
+
+# Organisation of the Repository
+
+Following the author's repository, we divided the code-base into [```classification```](https://github.com/MatPrst/FACT/tree/main/deceptive-attention/src/classification) and [```seq2seq```](https://github.com/MatPrst/FACT/tree/main/deceptive-attention/src/seq2seq) subfolders. In ```classification```, you can find both code used for *reproducing* the results, and code for *replicating* the results (specifically, see the [```BERT_replication```](https://github.com/MatPrst/FACT/tree/main/deceptive-attention/src/classification/BERT_replication) subfolder).
 
 ## Environment Configuration
 
@@ -19,17 +24,17 @@ pip install -r requirements.txt
 
 ## Visualizing Results
 
-We provide an IPython notebook detailing all results from our reproducibility report. 
-Start your jupyter server and run all cells in `deceptive-attention/src/experiments.ipynb`to reproduce the reported results.
+We provide several IPython notebooks detailing all results from the respective parts of our reproducibility report:
+
+-
+-
+- [```BERT replication notebook```](https://github.com/MatPrst/FACT/blob/main/deceptive-attention/src/classification/BERT_replication/BERT%20replication%20notebook%20completed.ipynb)
+
 
 ## Running Experiments
 
 ## Datasets
 
-## Verifying the Implementation
-
-- TODO
-- Describe Unit tests?
 
 ## Authors
 

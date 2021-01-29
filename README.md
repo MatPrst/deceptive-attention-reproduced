@@ -23,7 +23,7 @@ Please note that for the *replication* code, [```a separate environment```](dece
 ## Classification Reproduction
 
 
-## Classification / BERT Replication
+## Classification BERT Replication
 
 For the BERT replication, all 7 experiments for a specified task and seed can be produced by running:
 ```

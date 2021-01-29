@@ -1,26 +1,23 @@
-## Sequence to sequence tasks
+# Sed2Seq Tasks
 
-This part of the code will help you reproduce the Table 4 in the paper.
+This is about how to reproduce Table 4 and 4 in our reproduction report using the unidirectional and bidirectional GRU.
 
+Assuming [our environment `attention`](../../../env.yml) has been properly installed and activated. If not - check out our [root README file](../../../README.md).
 
-For the dependencies, please check the `environment.yml` file in the parent directory. To create the same conda environment you can run `conda env create -f environment.yml`
+We provide the [Jupyter Notebook `experiments.ipynb`](experiments.ipynb) which allows to reproduce all the experiments.
+There are two main sections with allow for:
 
+- Training + Evaluation: Training the model for task `Bigram Flip`, `Sequence Copy`, `Sequence Reverse` or `English to German translation`.
+- Evaluation: Load our pretrained models and run the experiments with these for flexible configurations regarding seeds, coefficients and tasks.
 
-To run for all the 4 tasks, run:
+## Training + Evaluation
 
-`CUDA_VISIBLE_DEVICES=0 bash run_tasks.sh`
+## Evaluation
 
-Once the runs complete, you should be able to check the last few lines of the log files and find statistics like the following (for bigram-flip task, seed=1)
+In order to run evaluation with our pretrained models:
 
-```
-Final Test Accuracy ..........  100.00
-Final Test Attention Mass ....  93.34
-Convergence time in seconds ..  478.60
-Sample efficiency in epochs ..  3
-```
+1. Download the models from here TODO.
+2. Add them to the [`models-pretrained` folder](data/models-pretrained/).
+3. Run respective cells in the notebook.
 
-A sample log file is available in the logs directory. You can effectively `grep`, `cut` the log files to attain the summarized results as in Table 4 in the paper.
-
-For **no attention** and **uniform attention** baselines run the following:
-
-`CUDA_VISIBLE_DEVICES=0 bash run_uniform_no_attn_baselines.sh`
+The notebook will output tables with the respective means over all configured seeds for accuracy, attention mass and possibly BLEU score.

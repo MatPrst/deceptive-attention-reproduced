@@ -32,6 +32,8 @@ from train import *
 #                'binary-flip-dot-product-0.1-2': 15,
 #                'binary-flip-dot-product-1.0-2': 10,
 #                'binary-flip-dot-product-0.0-3': 3,
+#                'binary-flip-dot-product-0.1-3': 4,
+#                'binary-flip-dot-product-1.0-3': 4,
 #                }
 
 BEST_EPOCHS = {'en-de-dot-product-0.0-1': 7,
@@ -52,6 +54,7 @@ def get_trained_model(task, seed, coefficient, attention, best_epoch, decode_no_
                                               decode_no_att_inference, logger)
     map_location = torch.cuda if torch.cuda.is_available() else torch.device('cpu')
     model_path = get_model_path(task, attention, seed, coefficient, best_epoch)
+    model_path.replace('models', 'models-pretrained')
     print(f'Loading model with path: {model_path}')
     model_object = torch.load(model_path, map_location=map_location)
     model.load_state_dict(model_object)
@@ -155,11 +158,11 @@ def run_en_de_experiments(clear_out=False, stage='train', seeds=None, coefficien
         "Attention": [],
         "$\\lambda$": [],
         "BLEU (NLTK)": [],
-        "BLEU (NLTK) STD": [],
+        "BLEU Std.": [],
         "Accuracy": [],
-        "Acc. STD": [],
+        "Acc. Std.": [],
         "Attention Mass": [],
-        "A.M. STD": [],
+        "A.M. Std.": [],
     }
 
     attention_names = {
@@ -177,18 +180,20 @@ def run_en_de_experiments(clear_out=False, stage='train', seeds=None, coefficien
                                      num_sentences_train=num_sentences_train)
 
             data['Accuracy'].append(mean(metrics["acc"]))
-            data['Acc. STD'].append(std(metrics["acc"]))
+            data['Acc. Std.'].append(std(metrics["acc"]))
             data['Attention Mass'].append(mean(metrics["att_mass"]))
-            data['A.M. STD'].append(std(metrics["att_mass"]))
+            data['A.M. Std.'].append(std(metrics["att_mass"]))
             data['BLEU (NLTK)'].append(mean(metrics["bleu_score"]))
-            data['BLEU (NLTK) STD'].append(std(metrics["bleu_score"]))
+            data['BLEU Std.'].append(std(metrics["bleu_score"]))
 
             if clear_out:
                 clear_output(wait=True)
 
     print("Finished all experiments. Displaying ...")
 
-    return pd.DataFrame(data)
+    data_frame = pd.DataFrame(data)
+    data_frame.style.set_properties(**{'text-align': 'center'})
+    return data_frame
 
 
 def run_synthetic_experiments(clear_out=False, stage='train', seeds=None, tasks=None, coefficients=None,
@@ -212,12 +217,12 @@ def run_synthetic_experiments(clear_out=False, stage='train', seeds=None, tasks=
     data = {
         "Attention": [],
         "$\\lambda$": [],
-        "Bigram Flip acc": [],
-        "Bigram Flip att-mass": [],
-        "Sequence Copy acc": [],
-        "Sequence Copy att-mass": [],
-        "Sequence Reverse acc": [],
-        "Sequence Reverse att-mass": []
+        "Bigram Flip Acc.": [],
+        "Bigram Flip A.M.": [],
+        "Sequence Copy Acc.": [],
+        "Sequence Copy A.M.": [],
+        "Sequence Reverse Acc.": [],
+        "Sequence Reverse A.M.": []
     }
 
     attention_names = {
@@ -242,15 +247,17 @@ def run_synthetic_experiments(clear_out=False, stage='train', seeds=None, tasks=
                                          num_sentences_train=num_sentences_train)
 
                 task_name = task_names[task]
-                data[task_name + " acc"].append(mean(metrics["acc"]))
-                data[task_name + " att-mass"].append(mean(metrics["att_mass"]))
+                data[task_name + " Acc."].append(mean(metrics["acc"]))
+                data[task_name + " A.M."].append(mean(metrics["att_mass"]))
 
                 if clear_out:
                     clear_output(wait=True)
 
     print("Finished all experiments. Displaying ...")
 
-    return pd.DataFrame(data)
+    frame = pd.DataFrame(data)
+    frame.style.set_properties(**{'text-align': 'center'})
+    return frame
 
 
 def get_coefficients(attention, coefficients):

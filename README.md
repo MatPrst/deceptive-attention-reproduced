@@ -22,6 +22,33 @@ Please note that for the *replication* code, [```a separate environment```](dece
 
 ## Classification Reproduction
 
+Classification tasks can be run using the [main.py](deceptive-attention/src/classification/main.py) script. Here are some examples on how to run the 3 tasks:
+```
+python main.py --num-epochs 15 --loss-hammer 0.0 --model emb-att --task sst-wiki --use-block-file
+python main.py --num-epochs 15 --loss-hammer 0.0 --model emb-att --task pronoun --block-words "he she her his him himself herself
+python main.py --num-epochs 5 --loss-hammer 0.0 --model $model_name --block-words "he she her his him himself herself hers mr mrs ms mr. mrs. ms." --task occupation-classification --clip-vocab
+```
+
+For reproducing the BERT experiments, we first need to install the following package containing the implementation of BERT used by the original authors. We implemented the missing anonymisation/removing of the impermissible tokens which was missing in the original repository:
+```
+pip install deceptive-attention/src/classification/pytorch-pretrained-BERT/
+```
+
+We can then run an experiment using the [run_classifier.py](deceptive-attention/src/classification/pytorch-pretrained-BERT/examples/run_classifier.py) script:
+```
+python run_classifier.py \
+    --name pronoun-bert
+    --data_dir  data/pronoun-bert
+    --bert_model bert-base-uncased
+    --do_train
+    --do_eval
+    --do_lower_case
+    --num_train_epochs 4
+    --output_dir output/
+    --hammer_coeff 0.0
+    --input_processor_type pronoun
+    --att_opt_func mean
+```
 
 ## Classification BERT Replication
 

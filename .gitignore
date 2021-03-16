@@ -135,7 +135,6 @@ dmypy.json
 .idea
 
 # temporary files
-logs/
 tensorboard/
 vocab/
 models/

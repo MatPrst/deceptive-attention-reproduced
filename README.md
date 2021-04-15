@@ -1,5 +1,6 @@
 # Deceive with Attention-Based Explanations
-![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4692668.svg)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4692668.svg)](https://doi.org/10.5281/zenodo.4692668)
+
 
 This repository and paper have been conducted during the Fairness, Accountability, Confidentiality and Transparency (FACT) course at University of Amsterdam. 
 Starting off with reproducing the original paper `Learning to Deceive with Attention-Based Explanations` we extend upon it with <TODO>.
